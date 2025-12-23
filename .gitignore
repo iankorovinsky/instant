@@ -1,0 +1,47 @@
+# Binaries
+temporal-worker
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# Dependency directories (if using vendoring)
+vendor/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment files
+.env
+.env.local
+*.pem
+*.key
+
+# Generated/scraped data (market data, instruments)
+data/*.json
+data/*.csv
+data/raw/
+data/scraped/
+
+# Build artifacts
+*.a
+
+# Logs
+*.log

@@ -1,0 +1,22 @@
+[Unit]
+Description=Temporal Worker
+After=network.target temporal-server.service
+Requires=temporal-server.service
+
+[Service]
+Type=simple
+WorkingDirectory=/path/to/instant
+ExecStart=/path/to/instant/temporal-worker
+Restart=always
+RestartSec=5
+User=temporal
+Group=temporal
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=temporal-worker
+
+[Install]
+WantedBy=multi-user.target
+

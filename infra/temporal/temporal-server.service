@@ -1,0 +1,20 @@
+[Unit]
+Description=Temporal Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/temporal server start-dev
+Restart=always
+RestartSec=5
+User=temporal
+Group=temporal
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=temporal-server
+
+[Install]
+WantedBy=multi-user.target
+
