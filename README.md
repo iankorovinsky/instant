@@ -1,6 +1,6 @@
 # Instant
 
-Demo-grade single-tenant trading system for **US Treasuries** with event-sourced architecture, deterministic execution simulation, and AI Copilot (propose-only).
+Demo-grade single-tenant trading system for **US Treasuries (Notes)** with event-sourced architecture, deterministic execution simulation, and **AI copilot**.
 
 **Core principle**: The event log is the system of record; all UI screens are projections.
 
