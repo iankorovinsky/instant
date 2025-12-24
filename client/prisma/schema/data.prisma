@@ -1,0 +1,50 @@
+// Market Data Models
+
+model Instrument {
+  id                String   @id @default(uuid())
+  cusip             String   @unique
+  name              String?
+  ticker            String?
+  type              String   // bill|note|bond|tips
+  coupon            Decimal? @db.Decimal(10, 4)
+  issueDate         DateTime @map("issue_date")
+  maturityDate      DateTime @map("maturity_date")
+  couponFrequency   Int?     @map("coupon_frequency")
+  dayCount          String?  @map("day_count")
+  
+  // Optional fields from CSV
+  askModifiedDuration    Decimal? @map("ask_modified_duration") @db.Decimal(12, 9)
+  bidModifiedDuration    Decimal? @map("bid_modified_duration") @db.Decimal(12, 9)
+  standardPoorRating     String?  @map("standard_poor_rating")
+  moodyRating            String?  @map("moody_rating")
+  fitchRating            String?  @map("fitch_rating")
+  dbrsRating             String?  @map("dbrs_rating")
+  askYieldToMaturity     Decimal? @map("ask_yield_to_maturity") @db.Decimal(10, 8)
+  askPrice               Decimal? @map("ask_price") @db.Decimal(10, 4)
+  series                 String?
+  bloombergCompositeRating String? @map("bloomberg_composite_rating")
+  maturityType           String?  @map("maturity_type")
+  announce               String?
+  issuedAmount           BigInt?  @map("issued_amount")
+  outstandingAmount      BigInt?  @map("outstanding_amount")
+  currency               String?  @default("USD")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("instruments")
+}
+
+model YieldCurve {
+  id         String   @id @default(uuid())
+  asOfDate   DateTime @map("as_of_date")
+  tenor      String   // 1MO, 3MO, 6MO, 1Y, 2Y, 3Y, 5Y, 7Y, 10Y, 20Y, 30Y
+  parYield   Decimal  @map("par_yield") @db.Decimal(10, 8)
+  sourceUrl  String?  @map("source_url")
+  ingestedAt DateTime @default(now()) @map("ingested_at")
+
+  @@unique([asOfDate, tenor])
+  @@map("yield_curves")
+  @@index([asOfDate])
+}
+
