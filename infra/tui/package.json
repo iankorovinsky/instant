@@ -1,0 +1,14 @@
+{
+  "name": "instant-tui",
+  "version": "1.0.0",
+  "description": "TUI for managing Instant services",
+  "main": "run.js",
+  "scripts": {
+    "start": "node run.js"
+  },
+  "dependencies": {
+    "blessed": "^0.1.81",
+    "blessed-contrib": "^4.11.0"
+  }
+}
+
