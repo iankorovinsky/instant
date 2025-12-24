@@ -31,6 +31,28 @@ Event-sourced CQRS system:
 - **Event Store**: Postgres (Supabase)
 - **Market Data**: FRED API, Financial Data Provider
 
+## Services Required
+
+### Infrastructure
+1. **Postgres (Supabase)** - Event store + read store (projections)
+2. **Temporal Server** - Workflow orchestration (self-hosted)
+
+### Application Services
+3. **Backend API (Go/Gin)** - Command service, query service, domain services:
+   - **OMS Service** - Order Management: captures orders (single/bulk), manages lifecycle (draft → approval → sent), handles amendments/cancels, initiates compliance checks (pre-trade), sends eligible orders to EMS. Does NOT handle fills or execution logic.
+   - **EMS Service** - Execution Management: deterministic execution simulation, generates fills with clip sizing/delays, computes slippage decomposition (bucket spread, size impact, limit constraints), marks order fill state. Does NOT create/edit order economic terms.
+   - **PMS Service** - Portfolio Management: tracks holdings/cash/positions, manages portfolio targets (duration, bucket weights), runs optimization to generate trade proposals, computes portfolio analytics (duration, DV01).
+   - **Compliance Service** - Rule evaluation: evaluates rules at pre-trade, pre-execution, and post-trade checkpoints. Emits warnings/blocks with explanations. Rules stored as data (DSL), not code.
+   - **Pricing Service** - Evaluated pricing: computes clean/dirty prices, accrued interest, yield, duration, DV01 from yield curves and instrument cashflows. All pricing labeled as "Evaluated" with as-of date.
+   - **Market Data Service** - Instrument master and yield curves: serves UST instrument data and daily yield curve data (par yields by tenor), tracks as-of dates for time-travel.
+4. **Projection Workers** - Build read models from events: consumes events from event bus, builds optimized read models (blotter, market grid, account positions, compliance status, proposals, event timeline). Rebuildable for time-travel/replay.
+5. **AI Copilot Service (Python/FastAPI)** - Natural language → command plans: accepts natural language requests, returns draft command plans with commands, rationale, assumptions, confidence. User must explicitly approve before execution (propose-only, never emits events directly).
+6. **Frontend (Next.js)** - Web UI: displays projections (blotter, market grid, portfolios, compliance), sends commands via API, shows event timelines, time-travel controls, AI copilot interface.
+
+### External APIs (Synced Via Temporal / Scripts)
+7. **FRED API** - Daily yield curve data
+8. **Financial Data Provider** - Instrument master data (CSV)
+
 ## Key Features
 
 - **Deterministic**: Same inputs → same outputs (pricing, optimization, execution sim)

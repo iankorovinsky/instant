@@ -64,4 +64,4 @@ This instrument data was fetched from a financial data provider (not mocked).
 
 ### Ingestion
 
-Use `ingest_security_data.py` (or equivalent) to load data into DB.
+Run `python ingest_security_data.py` to load data into DB.

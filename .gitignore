@@ -89,6 +89,11 @@ data/*.csv
 data/raw/
 data/scraped/
 
+# TUI service manager files
+.service-logs/
+.service-state
+.services.pid
+
 # Build artifacts
 *.a
 
