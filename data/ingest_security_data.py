@@ -82,12 +82,12 @@ def create_supabase_client() -> Client:
     
 def transform_row(row: pd.Series) -> Dict[str, Any]:
     """Transform CSV row to database record format matching Prisma schema (camelCase)."""
-        
     # Use camelCase field names to match Prisma schema (no @map directives)
+    ticker = parse_string(row.get('Ticker'))
     record = {
         'cusip': parse_string(row.get('CUSIP')),
         'name': parse_string(row.get('Name')),
-        'ticker': parse_string(row.get('Ticker')) if parse_string(row.get('Ticker')) != "T" else None,
+        'ticker': None if ticker == "T" else ticker,
         'type': 'note',
         'coupon': parse_decimal(row.get('Coupon')),
         'issueDate': parse_date(row.get('Issue Date')),

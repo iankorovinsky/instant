@@ -67,13 +67,6 @@ REMEMBER TO USE SHADCN FOR COMPONENTS WHERE NEEDED
 4. All `/app/*` routes check auth status
 5. Logout → redirects to `/`
 
-### 2.3 Auth Implementation Notes
-- Simple email/password or OAuth (TBD)
-- Session management via cookies/localStorage
-- Auth state managed in React context or Zustand store
-- Protected route wrapper component for `/app/*` routes
-- Mock auth acceptable during initial implementation (no backend)
-
 ---
 
 ## 2.5 Advisor's Client Structure
