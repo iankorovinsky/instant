@@ -8,10 +8,9 @@ enum instrument_type {
 }
 
 model Instrument {
-  id                String   @id @default(uuid())
-  cusip             String   @unique
+  cusip             String   @id @unique
   name              String
-  ticker            String
+  ticker            String?
   type              instrument_type
   coupon            Decimal  @db.Decimal(10, 4)
   issueDate         DateTime
