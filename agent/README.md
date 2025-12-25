@@ -29,3 +29,13 @@ Service runs on `http://localhost:8000` by default.
 
 Managed via `uv` - see `pyproject.toml` for dependencies.
 
+## Architecture
+
+reasoning_loop.py
+
+queriers
+
+renderers
+
+
+
