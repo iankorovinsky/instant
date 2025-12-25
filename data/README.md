@@ -64,4 +64,34 @@ This instrument data was fetched from a financial data provider (not mocked).
 
 ### Ingestion
 
-Run `python ingest_security_data.py` to load data into DB.
+**Setup:**
+1. Install Python dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. Set environment variables (create `.env` file or export):
+   ```bash
+   SUPABASE_URL=your_supabase_url
+   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+   ```
+   
+   Or use the Next.js env var names:
+   ```bash
+   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_anon_key
+   ```
+   
+   **Note**: For upsert operations, you may need the service role key instead of the anon key.
+
+**Run:**
+```bash
+python ingest_security_data.py
+```
+
+The script will:
+- Load data from `ust-notes-data.csv`
+- Transform CSV columns to database schema
+- Upsert records by CUSIP (unique key)
+- Handle null values and "#N/A" placeholders
+- Determine instrument type (bill/note/bond) based on maturity

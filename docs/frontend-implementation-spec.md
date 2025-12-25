@@ -76,52 +76,47 @@ REMEMBER TO USE SHADCN FOR COMPONENTS WHERE NEEDED
 
 ---
 
-## 2.5 RIA Organizational Structure
+## 2.5 Advisor's Client Structure
 
 ### 2.5.1 Hierarchy
-Instant is built for **Registered Investment Advisors (RIAs)**, which have a hierarchical organizational structure:
+The UI is built from the **advisor's perspective**. The advisor manages their clients organized as:
 
 ```
-Organization (RIA Firm)
-  └── Advisor
-      └── Household (Client Group)
-          └── Account (Individual Account)
+Advisor (You)
+  └── Household (Client Group)
+      └── Account (Individual Account)
 ```
 
 **Levels**:
-1. **Organization**: The RIA firm itself (single-tenant system)
-2. **Advisor**: Individual financial advisor within the firm
-3. **Household**: A client household (may contain multiple accounts)
-4. **Account**: Individual investment account
+1. **Household**: A client household (may contain multiple accounts)
+2. **Account**: Individual investment account
 
 ### 2.5.2 UI Implications
-- **Navigation**: Users can filter/view by advisor, household, or account
-- **Compliance**: Rules can be scoped at any level (see §3.2.5)
-- **Portfolio Management**: Aggregations at household and advisor levels
-- **Order Management**: Orders are always associated with an account, but UI shows household/advisor context
-- **Context Breadcrumbs**: Show current scope (Organization > Advisor > Household > Account)
+- **Navigation**: Filter/view by household or account
+- **Compliance**: Rules can be scoped globally, per-household, or per-account
+- **Portfolio Management**: Aggregations at household level
+- **Order Management**: Orders are associated with an account, UI shows household context
+- **Context Breadcrumbs**: Show current scope (Household > Account) when drilling down
 
 ### 2.5.3 Data Relationships
 - Each account belongs to exactly one household
-- Each household belongs to exactly one advisor
-- Each advisor belongs to the organization
-- Orders reference accounts (which implies household and advisor)
-- Compliance rules can target any level
-- Portfolio analytics can be aggregated upward (account → household → advisor)
+- Orders reference accounts (which implies household)
+- Compliance rules can target global, household, or account level
+- Portfolio analytics can be aggregated upward (account → household)
 
 ---
 
 ## 3. Page Structure & Routes
 
 ### 3.1 Home Page (`/`)
-**Purpose**: Project showcase, landing page (target audience: RIAs)
+**Purpose**: Project showcase, landing page for advisors
 
 **Sections**:
-- Hero with tagline (emphasize RIA-focused features)
+- Hero with tagline
 - Key features overview:
-  - Multi-level compliance (global to account)
-  - Advisor/household/account hierarchy
+  - Household/account management
   - Portfolio optimization
+  - Compliance rules
   - Event-sourced audit trail
 - Visual demo/preview (static or animated)
 - Login CTA
@@ -134,32 +129,31 @@ Organization (RIA Firm)
 ### 3.2 Application Routes (`/app/*`)
 
 #### 3.2.1 Dashboard (`/app`)
-**Purpose**: Overview, quick actions, recent activity (RIA context)
+**Purpose**: Overview, quick actions, recent activity
 
 **Components**:
 - Market date selector (as-of date)
 - Quick stats cards:
-  - Total Advisors
   - Total Households
   - Total Accounts
   - Total AUM
   - Orders pending approval
   - Active compliance violations
-- Recent orders table (last 10) with advisor/household/account context
+- Recent orders table (last 10) with household/account context
 - Recent events timeline (last 10)
 - Quick action buttons:
   - Create Order
   - Run Optimization
   - View Compliance Status
   - Add New Account
-- Advisor/Household/Account quick selector (filter dashboard by scope)
+- Household/Account quick selector (filter dashboard by scope)
 
-**Mock Data**: Static JSON with sample orders, events, advisor/household/account hierarchy
+**Mock Data**: Static JSON with sample orders, events, household/account hierarchy
 
 ---
 
 #### 3.2.2 Order Management System (`/app/oms`)
-**Purpose**: Order lifecycle management (RIA context: orders linked to accounts/households/advisors)
+**Purpose**: Order lifecycle management
 
 **Sub-routes**:
 - `/app/oms/orders` - Order blotter (main view)
@@ -169,25 +163,24 @@ Organization (RIA Firm)
 
 **Key Components**:
 - **Blotter View** (`/app/oms/orders`)
-  - Table: CUSIP, Side, Quantity, Order Type, State, **Account, Household, Advisor**, Compliance Status, Last Fill, PnL
-  - Filters: 
+  - Table: CUSIP, Side, Quantity, Order Type, State, Account, Household, Compliance Status, Last Fill, PnL
+  - Filters:
     - State
     - Account
     - Household
-    - Advisor
     - Date range
-  - Group by: Advisor / Household / Account (optional)
+  - Group by: Household / Account (optional)
   - Actions: Create, Approve, Cancel, View Detail
   - Status indicators: Blue (pending), Green (approved/filled), Red (rejected)
-  
+
 - **Order Detail** (`/app/oms/orders/:id`)
-  - Order information card (shows account, household, advisor context)
+  - Order information card (shows account, household context)
   - Compliance evaluation results (shows which scope-level rules evaluated)
   - Execution history (fills)
   - Event timeline
   - Actions: Approve, Reject, Cancel, Amend
 
-**Mock Data**: Sample orders in various states (DRAFT, APPROVAL_PENDING, APPROVED, FILLED, etc.) with account/household/advisor associations
+**Mock Data**: Sample orders in various states (DRAFT, APPROVAL_PENDING, APPROVED, FILLED, etc.) with account/household associations
 
 ---
 
@@ -219,69 +212,62 @@ Organization (RIA Firm)
 ---
 
 #### 3.2.4 Portfolio Management System (`/app/pms`)
-**Purpose**: Holdings, targets, optimization, proposals (RIA context: advisors, households, accounts)
+**Purpose**: Holdings, targets, optimization, proposals
 
 **Sub-routes**:
-- `/app/pms/advisors` - Advisor list
-- `/app/pms/advisors/:id` - Advisor detail (households, accounts)
 - `/app/pms/households` - Household list
 - `/app/pms/households/:id` - Household detail (accounts, aggregated positions)
 - `/app/pms/accounts` - Account list
 - `/app/pms/accounts/:id` - Account detail (positions, analytics)
-- `/app/pms/targets` - Target configuration (by advisor/household/account)
+- `/app/pms/targets` - Target configuration (by household/account)
 - `/app/pms/optimization` - Run optimization, view proposals
 - `/app/pms/proposals/:id` - Proposal detail
 
 **Key Components**:
-- **Advisor List** (`/app/pms/advisors`)
-  - Table: Advisor Name, Household Count, Account Count, Total AUM, Last Activity
-  - Filter by name, search
-  - Click to view advisor detail
-  
-- **Advisor Detail** (`/app/pms/advisors/:id`)
-  - Advisor information
-  - Households list (under this advisor)
-  - Aggregated analytics across all households
-  - Quick actions: Create household, Run optimization
-  
 - **Household List** (`/app/pms/households`)
-  - Table: Household Name, Advisor, Account Count, Total Market Value, Last Activity
-  - Filter by advisor, search
+  - Table: Household Name, Account Count, Total Market Value, Last Activity
+  - Filter by name, search
   - Click to view household detail
-  
+
 - **Household Detail** (`/app/pms/households/:id`)
-  - Household information (client name, advisor)
+  - Household information (client name)
   - Accounts list (under this household)
   - Aggregated positions across all accounts
   - Aggregated analytics: Total Duration, Total DV01, Total Market Value
   - As-of date selector
-  
+  - Quick actions: Add account, Run optimization
+
+- **Account List** (`/app/pms/accounts`)
+  - Table: Account Name, Household, Market Value, Duration, Last Activity
+  - Filter by household, search
+  - Click to view account detail
+
 - **Account Positions** (`/app/pms/accounts/:id`)
-  - Account information (account name, household, advisor)
+  - Account information (account name, household)
   - Cash balance
   - Positions table: CUSIP, Quantity, Avg Cost, Market Value, Duration, DV01
   - Portfolio analytics: Total Duration, Total DV01, Market Value
   - As-of date selector
-  
+
 - **Optimization** (`/app/pms/optimization`)
-  - Scope selector: Account / Household / Advisor
+  - Scope selector: Account / Household
   - Target inputs (duration, bucket weights)
   - Run optimization button
   - Proposal preview (generated trades, predicted deltas)
   - Approve/Reject proposal actions
-  
+
 - **Proposal Detail** (`/app/pms/proposals/:id`)
   - Proposed trades list
   - Predicted analytics delta
   - Assumptions display
   - Approval actions
 
-**Mock Data**: Sample advisors, households, accounts with positions, sample proposals
+**Mock Data**: Sample households, accounts with positions, sample proposals
 
 ---
 
 #### 3.2.5 Compliance (`/app/compliance`)
-**Purpose**: Rule management, violation tracking (RIA context: hierarchical scope)
+**Purpose**: Rule management, violation tracking
 
 **Sub-routes**:
 - `/app/compliance/rules` - Rule set list and editor
@@ -293,27 +279,23 @@ Organization (RIA Firm)
   - Rule list table with scope column
   - Create/Edit rule form:
     - Rule ID, severity (BLOCK/WARN)
-    - **Scope selector** (hierarchical):
-      - **Global**: System-wide, applies to all
-      - **Organization**: RIA firm-level, applies to all advisors/accounts
-      - **Advisor**: Specific advisor, applies to all their households/accounts
+    - **Scope selector**:
+      - **Global**: Applies to all households/accounts
       - **Household**: Specific household, applies to all accounts in household
       - **Account**: Specific account only
-    - Scope target selector (when scope is Advisor/Household/Account):
-      - Advisor dropdown (for advisor/household/account scope)
+    - Scope target selector (when scope is Household/Account):
       - Household dropdown (for household/account scope)
       - Account dropdown (for account scope)
     - Predicate builder (metric, operator, value)
     - Explanation template
   - Publish/Version management
   - Scope hierarchy visualization (breadcrumb showing inheritance)
-  
+
 - **Violations View** (`/app/compliance/violations`)
   - Table: Rule ID, Scope Level, Scope Target, Order/Account, Metric Value, Threshold, Status
   - Filter by:
     - Severity (BLOCK/WARN)
-    - Scope level (Global/Organization/Advisor/Household/Account)
-    - Advisor
+    - Scope level (Global/Household/Account)
     - Household
     - Account
   - Group by scope level option
@@ -321,7 +303,7 @@ Organization (RIA Firm)
   - Show rule inheritance (e.g., "Inherited from Global rule X")
 
 **Scope Hierarchy Notes**:
-- Rules inherit down the hierarchy (Global → Organization → Advisor → Household → Account)
+- Rules inherit down the hierarchy (Global → Household → Account)
 - More specific rules override less specific ones
 - UI should show which rules apply at each level
 - Violations should indicate which rule level triggered the violation
@@ -401,8 +383,8 @@ Organization (RIA Firm)
 - **Status Badges**: Reusable status indicators (blue/green/red)
 - **Loading States**: Skeleton loaders, spinners
 - **Error Boundaries**: Graceful error handling
-- **Scope Breadcrumb**: Shows current context (Organization > Advisor > Household > Account) when applicable
-- **Hierarchy Selector**: Dropdown/selector for navigating RIA hierarchy (Advisor/Household/Account)
+- **Scope Breadcrumb**: Shows current context (Household > Account) when drilling down
+- **Hierarchy Selector**: Dropdown/selector for navigating hierarchy (Household/Account)
 
 ---
 
@@ -668,13 +650,12 @@ On OMS/PMS/Compliance pages, show contextual glass panel:
 
 ### 8.1 Sample Data Files
 Create JSON files in `/client/data/mock/`:
-- `advisors.json` - Sample advisors with metadata
-- `households.json` - Sample households linked to advisors
-- `accounts.json` - Sample accounts linked to households/advisors
-- `orders.json` - Sample orders in various states (with account/household/advisor context)
+- `households.json` - Sample households
+- `accounts.json` - Sample accounts linked to households
+- `orders.json` - Sample orders in various states (with account/household context)
 - `executions.json` - Sample executions with fills
 - `proposals.json` - Sample optimization proposals
-- `rules.json` - Sample compliance rules at each scope level (global, organization, advisor, household, account)
+- `rules.json` - Sample compliance rules at each scope level (global, household, account)
 - `instruments.json` - Sample UST instruments
 - `events.json` - Sample event stream
 - `copilot-responses.json` - Sample agent responses

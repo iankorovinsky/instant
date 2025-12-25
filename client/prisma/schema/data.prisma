@@ -1,50 +1,54 @@
 // Market Data Models
 
+enum instrument_type {
+  bill
+  note
+  bond
+  tips
+}
+
 model Instrument {
   id                String   @id @default(uuid())
   cusip             String   @unique
-  name              String?
-  ticker            String?
-  type              String   // bill|note|bond|tips
-  coupon            Decimal? @db.Decimal(10, 4)
-  issueDate         DateTime @map("issue_date")
-  maturityDate      DateTime @map("maturity_date")
-  couponFrequency   Int?     @map("coupon_frequency")
-  dayCount          String?  @map("day_count")
+  name              String
+  ticker            String
+  type              instrument_type
+  coupon            Decimal  @db.Decimal(10, 4)
+  issueDate         DateTime
+  maturityDate      DateTime
+  couponFrequency   Int
+  askModifiedDuration    Decimal  @db.Decimal(12, 9)
+  bidModifiedDuration    Decimal  @db.Decimal(12, 9)
+  askYieldToMaturity     Decimal  @db.Decimal(10, 8)
+  askPrice               Decimal  @db.Decimal(10, 4)
+  maturityType           String
+  issuedAmount           BigInt
+  outstandingAmount      BigInt
+  currency               String
   
-  // Optional fields from CSV
-  askModifiedDuration    Decimal? @map("ask_modified_duration") @db.Decimal(12, 9)
-  bidModifiedDuration    Decimal? @map("bid_modified_duration") @db.Decimal(12, 9)
-  standardPoorRating     String?  @map("standard_poor_rating")
-  moodyRating            String?  @map("moody_rating")
-  fitchRating            String?  @map("fitch_rating")
-  dbrsRating             String?  @map("dbrs_rating")
-  askYieldToMaturity     Decimal? @map("ask_yield_to_maturity") @db.Decimal(10, 8)
-  askPrice               Decimal? @map("ask_price") @db.Decimal(10, 4)
+  // Optional fields
+  standardPoorRating   String?
+  moodyRating            String?
+  fitchRating            String?
+  dbrsRating             String?
   series                 String?
-  bloombergCompositeRating String? @map("bloomberg_composite_rating")
-  maturityType           String?  @map("maturity_type")
+  bloombergCompositeRating String?
   announce               String?
-  issuedAmount           BigInt?  @map("issued_amount")
-  outstandingAmount      BigInt?  @map("outstanding_amount")
-  currency               String?  @default("USD")
   
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("instruments")
 }
 
 model YieldCurve {
   id         String   @id @default(uuid())
-  asOfDate   DateTime @map("as_of_date")
-  tenor      String   // 1MO, 3MO, 6MO, 1Y, 2Y, 3Y, 5Y, 7Y, 10Y, 20Y, 30Y
-  parYield   Decimal  @map("par_yield") @db.Decimal(10, 8)
-  sourceUrl  String?  @map("source_url")
-  ingestedAt DateTime @default(now()) @map("ingested_at")
+  asOfDate   DateTime
+  tenor      String
+  parYield   Decimal  @db.Decimal(10, 8)
+  ingestedAt DateTime @default(now())
 
   @@unique([asOfDate, tenor])
   @@map("yield_curves")
   @@index([asOfDate])
 }
-

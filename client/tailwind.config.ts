@@ -39,6 +39,8 @@ export default {
         },
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
+          light: "hsl(var(--destructive-light))",
+          dark: "hsl(var(--destructive-dark))",
           foreground: "hsl(var(--destructive-foreground))",
         },
         border: "hsl(var(--border))",
@@ -50,6 +52,21 @@ export default {
           "3": "hsl(var(--chart-3))",
           "4": "hsl(var(--chart-4))",
           "5": "hsl(var(--chart-5))",
+        },
+        /* Brand Colors */
+        "dark-teal": "hsl(var(--dark-teal))",
+        mint: "hsl(var(--mint))",
+        /* Semantic Colors - Blue (In-progress/Pending) */
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          light: "hsl(var(--info-light))",
+          dark: "hsl(var(--info-dark))",
+        },
+        /* Semantic Colors - Green (Success/Approved) */
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          light: "hsl(var(--success-light))",
+          dark: "hsl(var(--success-dark))",
         },
       },
       borderRadius: {
