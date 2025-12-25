@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import Link from "next/link";
 import {
   Building2,
@@ -17,7 +18,9 @@ import {
   Plus,
   TrendingUp,
   Shield,
-  FileText,
+  ArrowUpRight,
+  ArrowDownRight,
+  Calendar,
 } from "lucide-react";
 
 // Mock data - will be replaced with API calls later
@@ -26,31 +29,41 @@ const stats = [
     label: "Total Households",
     value: "24",
     icon: Building2,
-    change: "+2 this month",
+    change: "+2",
+    changeLabel: "this month",
+    trend: "up",
   },
   {
     label: "Total Accounts",
     value: "47",
     icon: Wallet,
-    change: "+5 this month",
+    change: "+5",
+    changeLabel: "this month",
+    trend: "up",
   },
   {
     label: "Total AUM",
     value: "$127.4M",
     icon: DollarSign,
-    change: "+3.2% MTD",
+    change: "+3.2%",
+    changeLabel: "MTD",
+    trend: "up",
   },
   {
     label: "Pending Orders",
     value: "8",
     icon: Clock,
-    change: "3 need approval",
+    change: "3",
+    changeLabel: "need approval",
+    trend: "neutral",
   },
   {
     label: "Compliance Issues",
     value: "2",
     icon: AlertTriangle,
-    change: "1 blocking",
+    change: "1",
+    changeLabel: "blocking",
+    trend: "down",
   },
 ];
 
@@ -131,77 +144,102 @@ const recentEvents = [
 ];
 
 function getStatusBadge(status: string) {
-  switch (status) {
-    case "PENDING_APPROVAL":
-      return (
-        <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
-          Pending
-        </Badge>
-      );
-    case "APPROVED":
-      return (
-        <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
-          Approved
-        </Badge>
-      );
-    case "FILLED":
-      return (
-        <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
-          Filled
-        </Badge>
-      );
-    case "REJECTED":
-      return (
-        <Badge className="bg-red-100 text-red-700 hover:bg-red-100">
-          Rejected
-        </Badge>
-      );
-    case "DRAFT":
-      return (
-        <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100">
-          Draft
-        </Badge>
-      );
-    default:
-      return <Badge variant="secondary">{status}</Badge>;
+  const variants: Record<string, { className: string; label: string }> = {
+    PENDING_APPROVAL: {
+      className: "bg-blue-50 text-blue-700 border-blue-200",
+      label: "Pending",
+    },
+    APPROVED: {
+      className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      label: "Approved",
+    },
+    FILLED: {
+      className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      label: "Filled",
+    },
+    REJECTED: {
+      className: "bg-red-50 text-red-700 border-red-200",
+      label: "Rejected",
+    },
+    DRAFT: {
+      className: "bg-slate-50 text-slate-700 border-slate-200",
+      label: "Draft",
+    },
+  };
+
+  const variant = variants[status] || {
+    className: "bg-slate-50 text-slate-700",
+    label: status,
+  };
+
+  return (
+    <Badge variant="outline" className={variant.className}>
+      {variant.label}
+    </Badge>
+  );
+}
+
+function getTrendIcon(trend: string) {
+  if (trend === "up") {
+    return <ArrowUpRight className="h-3 w-3 text-emerald-600" />;
   }
+  if (trend === "down") {
+    return <ArrowDownRight className="h-3 w-3 text-red-600" />;
+  }
+  return null;
 }
 
 export default function Dashboard() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">
             Welcome back. Here&apos;s an overview of your practice.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">As of:</span>
-          <Badge variant="outline" className="text-sm">
-            Dec 24, 2024
-          </Badge>
+        <div className="flex items-center gap-2 text-sm">
+          <Calendar className="h-4 w-4 text-muted-foreground" />
+          <span className="text-muted-foreground">As of</span>
+          <Badge variant="secondary">Dec 24, 2024</Badge>
         </div>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {stats.map((stat, index) => (
-          <Card key={index}>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-secondary/20 flex items-center justify-center">
-                  <stat.icon className="w-5 h-5 text-primary" />
+          <Card key={index} className="overflow-hidden">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                  <stat.icon className="h-5 w-5 text-primary" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{stat.value}</p>
-                  <p className="text-xs text-muted-foreground">{stat.label}</p>
-                </div>
+                {stat.trend !== "neutral" && (
+                  <div className="flex items-center gap-1 text-xs font-medium">
+                    {getTrendIcon(stat.trend)}
+                    <span
+                      className={
+                        stat.trend === "up"
+                          ? "text-emerald-600"
+                          : stat.trend === "down"
+                            ? "text-red-600"
+                            : "text-muted-foreground"
+                      }
+                    >
+                      {stat.change}
+                    </span>
+                  </div>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                {stat.change}
+              <div className="mt-4">
+                <p className="text-2xl font-bold">{stat.value}</p>
+                <p className="text-xs text-muted-foreground">{stat.label}</p>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {stat.trend === "neutral" ? `${stat.change} ` : ""}
+                {stat.changeLabel}
               </p>
             </CardContent>
           </Card>
@@ -209,65 +247,74 @@ export default function Dashboard() {
       </div>
 
       {/* Quick Actions */}
-      <div className="flex flex-wrap gap-3">
-        <Button asChild>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" asChild>
           <Link href="/app/oms/create">
-            <Plus className="w-4 h-4 mr-2" />
+            <Plus className="mr-2 h-4 w-4" />
             Create Order
           </Link>
         </Button>
-        <Button variant="outline" asChild>
+        <Button size="sm" variant="outline" asChild>
           <Link href="/app/pms/optimization">
-            <TrendingUp className="w-4 h-4 mr-2" />
+            <TrendingUp className="mr-2 h-4 w-4" />
             Run Optimization
           </Link>
         </Button>
-        <Button variant="outline" asChild>
+        <Button size="sm" variant="outline" asChild>
           <Link href="/app/compliance">
-            <Shield className="w-4 h-4 mr-2" />
+            <Shield className="mr-2 h-4 w-4" />
             View Compliance
-          </Link>
-        </Button>
-        <Button variant="outline" asChild>
-          <Link href="/app/pms/accounts">
-            <FileText className="w-4 h-4 mr-2" />
-            Add Account
           </Link>
         </Button>
       </div>
 
       {/* Main Content Grid */}
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid gap-6 lg:grid-cols-2">
         {/* Recent Orders */}
         <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Recent Orders</CardTitle>
-                <CardDescription>Last 5 orders across all accounts</CardDescription>
+                <CardTitle className="text-base font-semibold">
+                  Recent Orders
+                </CardTitle>
+                <CardDescription>
+                  Last 5 orders across all accounts
+                </CardDescription>
               </div>
               <Button variant="ghost" size="sm" asChild>
                 <Link href="/app/oms/orders">View All</Link>
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
+          <CardContent className="p-0">
+            <div className="divide-y">
               {recentOrders.map((order) => (
                 <div
                   key={order.id}
-                  className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                  className="flex items-center justify-between px-6 py-3 transition-colors hover:bg-muted/50"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium text-sm">{order.id}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {order.cusip} • {order.side} {order.quantity.toLocaleString()}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {order.household} / {order.account}
-                      </p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{order.id}</span>
+                      <Badge
+                        variant="outline"
+                        className={
+                          order.side === "BUY"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border-red-200 bg-red-50 text-red-700"
+                        }
+                      >
+                        {order.side}
+                      </Badge>
                     </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {order.cusip} &middot; {order.quantity.toLocaleString()}{" "}
+                      units
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {order.household} / {order.account}
+                    </p>
                   </div>
                   {getStatusBadge(order.status)}
                 </div>
@@ -278,10 +325,12 @@ export default function Dashboard() {
 
         {/* Recent Events */}
         <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Recent Events</CardTitle>
+                <CardTitle className="text-base font-semibold">
+                  Recent Events
+                </CardTitle>
                 <CardDescription>Latest activity in your system</CardDescription>
               </div>
               <Button variant="ghost" size="sm" asChild>
@@ -289,20 +338,20 @@ export default function Dashboard() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
+          <CardContent className="p-0">
+            <div className="divide-y">
               {recentEvents.map((event, index) => (
                 <div
                   key={index}
-                  className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                  className="flex items-start gap-3 px-6 py-3 transition-colors hover:bg-muted/50"
                 >
-                  <div className="w-2 h-2 mt-2 rounded-full bg-secondary" />
+                  <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary/60" />
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-sm">{event.type}</p>
+                    <p className="text-sm font-medium">{event.type}</p>
                     <p className="text-xs text-muted-foreground">
                       {event.description}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {event.timestamp}
                     </p>
                   </div>
