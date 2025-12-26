@@ -1,0 +1,153 @@
+// PMS Models
+
+enum account_type {
+  individual
+  joint
+  trust
+  ira
+  "401k"
+  corporate
+}
+
+model Household {
+  householdId String   @id @default(uuid())
+  name        String
+  createdAt   DateTime @default(now())
+  createdBy   String
+
+  accounts Account[]
+
+  @@map("households")
+  @@index([createdAt])
+}
+
+model Account {
+  accountId   String      @id @default(uuid())
+  householdId String
+  name        String
+  accountType account_type
+  modelId     String?
+  createdAt   DateTime    @default(now())
+  createdBy   String
+
+  household Household @relation(fields: [householdId], references: [householdId], onDelete: Cascade)
+  model     PortfolioModel? @relation(fields: [modelId], references: [modelId], onDelete: SetNull)
+  targets   PortfolioTarget[]
+  proposals Proposal[]
+
+  @@map("accounts")
+  @@index([householdId])
+  @@index([modelId])
+  @@index([createdAt])
+}
+
+model PortfolioModel {
+  modelId        String   @id @default(uuid())
+  name           String
+  description    String?
+  durationTarget Decimal  @db.Decimal(10, 4)
+  bucketWeights  Json     // BucketWeights type
+  constraints    Json?    // TargetConstraints type
+  createdAt      DateTime @default(now())
+  createdBy      String
+  updatedAt      DateTime @updatedAt
+  updatedBy      String
+
+  targets         PortfolioTarget[]
+  assignedAccounts Account[]
+
+  @@map("portfolio_models")
+  @@index([createdAt])
+}
+
+enum target_scope {
+  account
+  household
+}
+
+model PortfolioTarget {
+  targetId       String       @id @default(uuid())
+  scope          target_scope
+  scopeId        String       // accountId or householdId
+  modelId        String?
+  durationTarget Decimal      @db.Decimal(10, 4)
+  bucketWeights  Json         // BucketWeights type
+  constraints    Json?        // TargetConstraints type
+  effectiveFrom  DateTime
+  effectiveTo    DateTime?
+  createdAt      DateTime     @default(now())
+  createdBy      String
+
+  model PortfolioModel? @relation(fields: [modelId], references: [modelId], onDelete: SetNull)
+
+  @@map("portfolio_targets")
+  @@index([scope, scopeId])
+  @@index([modelId])
+  @@index([effectiveFrom, effectiveTo])
+}
+
+enum proposal_status {
+  DRAFT
+  APPROVED
+  REJECTED
+  SENT_TO_OMS
+}
+
+model Proposal {
+  proposalId        String          @id @default(uuid())
+  accountId         String?
+  householdId       String?
+  asOfDate          DateTime
+  targetId          String?
+  trades            Json            // ProposalTrade[] array
+  currentAnalytics  Json            // PortfolioAnalytics
+  predictedAnalytics Json           // PortfolioAnalytics
+  assumptions      String
+  status            proposal_status
+  createdAt         DateTime        @default(now())
+  createdBy         String
+  approvedAt        DateTime?
+  approvedBy        String?
+  sentToOmsAt       DateTime?
+
+  account Account? @relation(fields: [accountId], references: [accountId], onDelete: SetNull)
+
+  @@map("proposals")
+  @@index([accountId])
+  @@index([householdId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum rebalancing_rule_type {
+  DRIFT_BASED
+  TIME_BASED
+  EVENT_BASED
+}
+
+enum rebalancing_scope {
+  account
+  household
+  all
+}
+
+model RebalancingRule {
+  ruleId         String                @id @default(uuid())
+  name           String
+  type           rebalancing_rule_type
+  scope          rebalancing_scope
+  scopeId        String?
+  modelId        String?
+  driftThreshold Decimal?             @db.Decimal(5, 2) // percentage
+  schedule       String?               // cron expression
+  autoApprove    Boolean               @default(false)
+  enabled        Boolean               @default(true)
+  createdAt      DateTime              @default(now())
+  createdBy      String
+  lastTriggeredAt DateTime?
+
+  @@map("rebalancing_rules")
+  @@index([enabled])
+  @@index([type])
+  @@index([scope, scopeId])
+}

@@ -5,12 +5,12 @@ Requires=temporal-server.service
 
 [Service]
 Type=simple
-WorkingDirectory=/path/to/instant
-ExecStart=/path/to/instant/temporal-worker
+WorkingDirectory=/home/ian/instant
+ExecStart=/home/ian/instant/temporal-worker
 Restart=always
 RestartSec=5
-User=temporal
-Group=temporal
+User=ian
+Group=ian
 
 # Logging
 StandardOutput=journal
