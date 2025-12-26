@@ -4,11 +4,11 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/temporal server start-dev
+ExecStart=/home/ian/.temporalio/bin/temporal server start-dev
 Restart=always
 RestartSec=5
-User=temporal
-Group=temporal
+User=ian
+Group=ian
 
 # Logging
 StandardOutput=journal
