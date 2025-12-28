@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { AppSidebar } from "@/components/dashboard/app-sidebar";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CommandMenu } from "@/components/command-menu";
 
 async function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -21,6 +22,9 @@ async function AuthenticatedLayout({ children }: { children: React.ReactNode }) 
       <SidebarInset>
         <header className="flex h-14 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
+          <div className="flex-1 flex items-center justify-end">
+            <CommandMenu />
+          </div>
         </header>
         <div className="p-6">
           {children}
