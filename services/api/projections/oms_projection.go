@@ -18,16 +18,7 @@ type OMSProjection struct {
 }
 
 // NewOMSProjection creates a new OMS projection worker
-func NewOMSProjection(databaseURL string, eb *eventbus.EventBus) (*OMSProjection, error) {
-	db, err := sql.Open("postgres", databaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
-	}
-
-	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
-
+func NewOMSProjection(db *sql.DB, eb *eventbus.EventBus) (*OMSProjection, error) {
 	return &OMSProjection{
 		db:       db,
 		eventBus: eb,
@@ -59,11 +50,6 @@ func (p *OMSProjection) Start() {
 // Stop stops the projection worker
 func (p *OMSProjection) Stop() {
 	close(p.stopChan)
-}
-
-// Close closes the database connection
-func (p *OMSProjection) Close() error {
-	return p.db.Close()
 }
 
 // handleEvent routes events to appropriate handlers
@@ -322,7 +308,12 @@ func (p *OMSProjection) handleRuleEvaluated(event *events.Event) error {
 		return nil // Not an order-related compliance check
 	}
 
-	complianceResultJSON, err := json.Marshal(payload["complianceResult"])
+	complianceResultValue, ok := payload["complianceResult"]
+	if !ok {
+		return nil
+	}
+
+	complianceResultJSON, err := json.Marshal(complianceResultValue)
 	if err != nil {
 		return fmt.Errorf("failed to marshal compliance result: %w", err)
 	}

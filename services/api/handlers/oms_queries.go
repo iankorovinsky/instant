@@ -20,25 +20,11 @@ type OMSQueryHandler struct {
 }
 
 // NewOMSQueryHandler creates a new OMS query handler
-func NewOMSQueryHandler(databaseURL string, es *eventstore.EventStore) (*OMSQueryHandler, error) {
-	db, err := sql.Open("postgres", databaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
-	}
-
-	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
-
+func NewOMSQueryHandler(db *sql.DB, es *eventstore.EventStore) (*OMSQueryHandler, error) {
 	return &OMSQueryHandler{
 		db:         db,
 		eventStore: es,
 	}, nil
-}
-
-// Close closes the database connection
-func (h *OMSQueryHandler) Close() error {
-	return h.db.Close()
 }
 
 // GetBlotter returns a list of orders (blotter view)

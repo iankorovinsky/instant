@@ -22,8 +22,8 @@ type Service struct {
 }
 
 type liquidityProfile struct {
-	maxClip      float64
-	spreadBps    float64
+	maxClip       float64
+	spreadBps     float64
 	sizeImpactBps float64
 	sideImpactBps float64
 }
@@ -58,27 +58,13 @@ var bucketProfiles = map[string]liquidityProfile{
 }
 
 // NewService creates a new EMS service.
-func NewService(databaseURL string, es *eventstore.EventStore, eb *eventbus.EventBus) (*Service, error) {
-	db, err := sql.Open("postgres", databaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
-	}
-
-	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
-
+func NewService(db *sql.DB, es *eventstore.EventStore, eb *eventbus.EventBus) (*Service, error) {
 	return &Service{
 		eventStore: es,
 		eventBus:   eb,
 		db:         db,
 		stopChan:   make(chan struct{}),
 	}, nil
-}
-
-// Close closes the database connection.
-func (s *Service) Close() error {
-	return s.db.Close()
 }
 
 // Start listens for OrderSentToEMS events and runs execution simulations.
@@ -167,12 +153,12 @@ func (s *Service) runSimulation(orderID, actorID, correlationID string, asOfOver
 	executionStart := time.Now().UTC()
 
 	deterministicInputs := map[string]interface{}{
-		"baselinePrice": baselinePrice,
+		"baselinePrice":  baselinePrice,
 		"maturityBucket": bucket,
-		"maxClip": maxClip,
-		"spreadBps": profile.spreadBps,
-		"sizeImpactBps": profile.sizeImpactBps,
-		"sideImpactBps": profile.sideImpactBps,
+		"maxClip":        maxClip,
+		"spreadBps":      profile.spreadBps,
+		"sizeImpactBps":  profile.sizeImpactBps,
+		"sideImpactBps":  profile.sideImpactBps,
 	}
 
 	execRequested := events.NewEvent(
@@ -319,16 +305,16 @@ func (s *Service) runSimulation(orderID, actorID, correlationID string, asOfOver
 		"user",
 		correlationID,
 		map[string]interface{}{
-			"executionId":        executionID,
-			"filledQuantity":     totalFilled,
-			"avgFillPrice":       avgFillPrice,
-			"slippageTotal":      averageSlippage,
-			"slippageBreakdown":  slippageComponents,
+			"executionId":         executionID,
+			"filledQuantity":      totalFilled,
+			"avgFillPrice":        avgFillPrice,
+			"slippageTotal":       averageSlippage,
+			"slippageBreakdown":   slippageComponents,
 			"deterministicInputs": deterministicInputs,
-			"status":             ExecutionStatusSimulating,
-			"executionStartTime": executionStart,
-			"executionEndTime":   executionEnd,
-			"explanation":        "Deterministic execution simulation using bucketed liquidity profile.",
+			"status":              ExecutionStatusSimulating,
+			"executionStartTime":  executionStart,
+			"executionEndTime":    executionEnd,
+			"explanation":         "Deterministic execution simulation using bucketed liquidity profile.",
 		},
 	)
 	if causation != nil {
@@ -368,8 +354,13 @@ func (s *Service) runSimulation(orderID, actorID, correlationID string, asOfOver
 		"user",
 		correlationID,
 		map[string]interface{}{
-			"executionId":   executionID,
-			"orderId":       order.orderID,
+			"executionId":    executionID,
+			"orderId":        order.orderID,
+			"accountId":      order.accountID,
+			"instrumentId":   order.instrumentID,
+			"side":           order.side,
+			"filledQuantity": totalFilled,
+			"avgFillPrice":   avgFillPrice,
 			"settlementDate": settlementDate,
 		},
 	)

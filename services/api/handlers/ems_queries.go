@@ -17,22 +17,8 @@ type EMSQueryHandler struct {
 }
 
 // NewEMSQueryHandler creates a new EMS query handler.
-func NewEMSQueryHandler(databaseURL string) (*EMSQueryHandler, error) {
-	db, err := sql.Open("postgres", databaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
-	}
-
-	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
-
+func NewEMSQueryHandler(db *sql.DB) (*EMSQueryHandler, error) {
 	return &EMSQueryHandler{db: db}, nil
-}
-
-// Close closes the database connection.
-func (h *EMSQueryHandler) Close() error {
-	return h.db.Close()
 }
 
 // GetExecutions returns a list of executions with optional filters.
@@ -230,14 +216,16 @@ func (h *EMSQueryHandler) GetExecutionByID(c *gin.Context) {
 
 	query := `
 		SELECT
-			"executionId", "orderId", "accountId", "instrumentId", side,
-			"totalQuantity", "filledQuantity", "avgFillPrice", status,
-			"asOfDate", "executionStartTime", "executionEndTime",
-			"settlementDate", "settledDate",
-			"slippageTotal", "slippageBreakdown", "deterministicInputs",
-			explanation, "createdAt", "updatedAt"
-		FROM executions
-		WHERE "executionId" = $1
+			e."executionId", e."orderId", e."accountId", e."instrumentId", e.side,
+			e."totalQuantity", e."filledQuantity", e."avgFillPrice", e.status,
+			e."asOfDate", e."executionStartTime", e."executionEndTime",
+			e."settlementDate", e."settledDate",
+			e."slippageTotal", e."slippageBreakdown", e."deterministicInputs",
+			e.explanation, e."createdAt", e."updatedAt",
+			o."orderType", o."limitPrice", o."curveSpreadBp"
+		FROM executions e
+		LEFT JOIN orders o ON e."orderId" = o."orderId"
+		WHERE e."executionId" = $1
 	`
 
 	var (
@@ -260,6 +248,9 @@ func (h *EMSQueryHandler) GetExecutionByID(c *gin.Context) {
 		explanation       sql.NullString
 		createdAt         time.Time
 		updatedAt         time.Time
+		orderType         sql.NullString
+		limitPrice        sql.NullFloat64
+		curveSpreadBp     sql.NullFloat64
 	)
 
 	err := h.db.QueryRow(query, executionID).Scan(
@@ -269,6 +260,7 @@ func (h *EMSQueryHandler) GetExecutionByID(c *gin.Context) {
 		&settlementDate, &settledDate,
 		&slippageTotal, &slippageBreakdown, &deterministic,
 		&explanation, &createdAt, &updatedAt,
+		&orderType, &limitPrice, &curveSpreadBp,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -325,6 +317,15 @@ func (h *EMSQueryHandler) GetExecutionByID(c *gin.Context) {
 	}
 	if explanation.Valid {
 		execution["explanation"] = explanation.String
+	}
+	if orderType.Valid {
+		execution["orderType"] = orderType.String
+	}
+	if limitPrice.Valid {
+		execution["limitPrice"] = limitPrice.Float64
+	}
+	if curveSpreadBp.Valid {
+		execution["curveSpreadBp"] = curveSpreadBp.Float64
 	}
 
 	fillsQuery := `

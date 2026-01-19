@@ -45,6 +45,10 @@ func (h *OMSCommandHandler) HandleCreateOrder(c *gin.Context) {
 			})
 			return
 		}
+		if isOMSCreationValidationError(err) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -262,6 +266,10 @@ func (h *OMSCommandHandler) HandleCommandRouter(c *gin.Context) {
 
 		orderID, err := h.omsService.CreateOrder(createReq, correlationID)
 		if err != nil {
+			if isOMSCreationValidationError(err) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -343,4 +351,11 @@ func (h *OMSCommandHandler) HandleCommandRouter(c *gin.Context) {
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "unknown command type"})
 	}
+}
+
+func isOMSCreationValidationError(err error) bool {
+	return err == oms.ErrInvalidQuantity ||
+		err == oms.ErrInvalidOrderType ||
+		err == oms.ErrMissingLimitPrice ||
+		err == oms.ErrMissingCurveSpread
 }

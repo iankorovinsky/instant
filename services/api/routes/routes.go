@@ -14,6 +14,12 @@ func SetupRoutes(
 	omsQueryHandler *handlers.OMSQueryHandler,
 	emsCommandHandler *handlers.EMSCommandHandler,
 	emsQueryHandler *handlers.EMSQueryHandler,
+	pmsCommandHandler *handlers.PMSCommandHandler,
+	pmsQueryHandler *handlers.PMSQueryHandler,
+	complianceCommandHandler *handlers.ComplianceCommandHandler,
+	complianceQueryHandler *handlers.ComplianceQueryHandler,
+	marketDataQueryHandler *handlers.MarketDataQueryHandler,
+	copilotCommandHandler *handlers.CopilotCommandHandler,
 	eventStore *eventstore.EventStore,
 ) {
 	// Health check
@@ -38,6 +44,32 @@ func SetupRoutes(
 			ems.POST("/executions/request", emsCommandHandler.HandleRequestExecution)
 		}
 
+		pms := api.Group("/pms")
+		{
+			pms.POST("/targets", pmsCommandHandler.HandleSetTarget)
+			pms.POST("/optimization", pmsCommandHandler.HandleRunOptimization)
+			pms.POST("/proposals/:id/approve", pmsCommandHandler.HandleApproveProposal)
+			pms.POST("/proposals/:id/send-to-oms", pmsCommandHandler.HandleSendProposalToOMS)
+		}
+
+		compliance := api.Group("/compliance")
+		{
+			compliance.POST("/rules", complianceCommandHandler.CreateRule)
+			compliance.PATCH("/rules/:id", complianceCommandHandler.UpdateRule)
+			compliance.POST("/rules/:id/enable", complianceCommandHandler.EnableRule)
+			compliance.POST("/rules/:id/disable", complianceCommandHandler.DisableRule)
+			compliance.DELETE("/rules/:id", complianceCommandHandler.DeleteRule)
+			compliance.POST("/rule-sets/:id/publish", complianceCommandHandler.PublishRuleSet)
+		}
+
+		// Copilot endpoints (AI Draft management)
+		copilot := api.Group("/copilot")
+		{
+			copilot.POST("/drafts", copilotCommandHandler.HandleCreateDraft)
+			copilot.POST("/drafts/:id/approve", copilotCommandHandler.HandleApproveDraft)
+			copilot.POST("/drafts/:id/reject", copilotCommandHandler.HandleRejectDraft)
+		}
+
 		// Generic command endpoint (for event-driven architecture)
 		api.POST("/commands", omsCommandHandler.HandleCommandRouter)
 	}
@@ -52,11 +84,28 @@ func SetupRoutes(
 		views.GET("/executions", emsQueryHandler.GetExecutions)
 		views.GET("/executions/:id", emsQueryHandler.GetExecutionByID)
 
+		// Market data views
+		views.GET("/instruments", marketDataQueryHandler.GetInstruments)
+		views.GET("/instruments/:cusip", marketDataQueryHandler.GetInstrumentByCusip)
+		views.GET("/curves", marketDataQueryHandler.GetYieldCurve)
+		views.GET("/curves/dates", marketDataQueryHandler.GetCurveDates)
+		views.GET("/market-grid", marketDataQueryHandler.GetMarketGrid)
+		views.GET("/pricing/:cusip", marketDataQueryHandler.GetEvaluatedPricing)
+		views.GET("/pricing/:cusip/history", marketDataQueryHandler.GetPricingHistory)
+		views.GET("/marketdata/summary", marketDataQueryHandler.GetMarketDataSummary)
+
 		// Other views (to be implemented)
-		views.GET("/market-grid", getMarketGrid)
-		views.GET("/accounts/:id", getAccount)
-		views.GET("/proposals/:id", getProposal)
+		views.GET("/accounts", pmsQueryHandler.GetAccounts)
+		views.GET("/accounts/:id", pmsQueryHandler.GetAccountView)
+		views.GET("/households", pmsQueryHandler.GetHouseholds)
+		views.GET("/households/:id", pmsQueryHandler.GetHouseholdView)
+		views.GET("/proposals", pmsQueryHandler.GetProposals)
+		views.GET("/proposals/:id", pmsQueryHandler.GetProposalByID)
+		views.GET("/drift", pmsQueryHandler.GetDriftView)
 		views.GET("/compliance", getComplianceStatus)
+		views.GET("/compliance/rules", complianceQueryHandler.GetRules)
+		views.GET("/compliance/rules/:id", complianceQueryHandler.GetRuleDetail)
+		views.GET("/compliance/violations", complianceQueryHandler.GetViolations)
 	}
 
 	// Events (event store queries)

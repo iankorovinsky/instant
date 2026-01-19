@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"instant/services/api/eventbus"
 	"instant/services/api/events"
-	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -19,16 +18,7 @@ type EMSProjection struct {
 }
 
 // NewEMSProjection creates a new EMS projection worker.
-func NewEMSProjection(databaseURL string, eb *eventbus.EventBus) (*EMSProjection, error) {
-	db, err := sql.Open("postgres", databaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
-	}
-
-	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
-
+func NewEMSProjection(db *sql.DB, eb *eventbus.EventBus) (*EMSProjection, error) {
 	return &EMSProjection{
 		db:       db,
 		eventBus: eb,
@@ -59,11 +49,6 @@ func (p *EMSProjection) Start() {
 // Stop stops the projection worker.
 func (p *EMSProjection) Stop() {
 	close(p.stopChan)
-}
-
-// Close closes the database connection.
-func (p *EMSProjection) Close() error {
-	return p.db.Close()
 }
 
 func (p *EMSProjection) handleEvent(event *events.Event) error {
@@ -298,19 +283,4 @@ func (p *EMSProjection) handleSettlementBooked(event *events.Event) error {
 
 	_, err = p.db.Exec(query, settlementDate, event.OccurredAt, event.OccurredAt, executionID)
 	return err
-}
-
-func parseTime(value interface{}) (time.Time, error) {
-	switch v := value.(type) {
-	case time.Time:
-		return v, nil
-	case string:
-		parsed, err := time.Parse(time.RFC3339, v)
-		if err != nil {
-			return time.Time{}, fmt.Errorf("invalid time format: %w", err)
-		}
-		return parsed, nil
-	default:
-		return time.Time{}, fmt.Errorf("unsupported time value: %T", value)
-	}
 }

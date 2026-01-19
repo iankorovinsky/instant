@@ -15,6 +15,7 @@ const (
 	AggregatePortfolio        = "Portfolio"
 	AggregateProposal         = "Proposal"
 	AggregateRuleSet          = "RuleSet"
+	AggregateRule             = "Rule"
 	AggregateRoutingPolicy    = "RoutingPolicy"
 	AggregateUploadBatch      = "UploadBatch"
 	AggregateAIDraft          = "AIDraft"
@@ -51,6 +52,11 @@ const (
 // EventType constants - Compliance
 const (
 	EventRuleSetPublished           = "RuleSetPublished"
+	EventRuleCreated                = "RuleCreated"
+	EventRuleUpdated                = "RuleUpdated"
+	EventRuleDeleted                = "RuleDeleted"
+	EventRuleEnabled                = "RuleEnabled"
+	EventRuleDisabled               = "RuleDisabled"
 	EventRuleEvaluated              = "RuleEvaluated"
 	EventRuleViolationDetected      = "RuleViolationDetected"
 	EventOrderBlockedByCompliance   = "OrderBlockedByCompliance"
