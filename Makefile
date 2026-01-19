@@ -1,4 +1,4 @@
-.PHONY: dev install-tui migrate migrate-deploy migrate-status prisma-generate
+.PHONY: dev install-tui migrate migrate-deploy migrate-status prisma-generate data test test-integration
 
 # Install TUI dependencies
 install-tui:
@@ -23,3 +23,16 @@ prisma-generate:
 # Check migration status
 migrate-status:
 	@cd client && npx dotenv-cli -e ../.env -- npx prisma migrate status
+
+# Ingest market data (securities and yield curves)
+data:
+	@cd data && python ingest_security_data.py
+	@cd data && python ingest_yield_curves_fred.py
+
+# Run integration tests
+test-integration:
+	@chmod +x test-integration.sh
+	@./test-integration.sh
+
+# Alias for integration tests
+test: test-integration
