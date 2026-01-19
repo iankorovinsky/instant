@@ -1,4 +1,4 @@
-.PHONY: dev install-tui migrate migrate-deploy migrate-status prisma-generate data test test-integration
+.PHONY: dev install-tui migrate migrate-deploy migrate-status prisma-generate data seed-test-data test test-integration
 
 # Install TUI dependencies
 install-tui:
@@ -29,10 +29,16 @@ data:
 	@cd data && python ingest_security_data.py
 	@cd data && python ingest_yield_curves_fred.py
 
-# Run integration tests
-test-integration:
-	@chmod +x test-integration.sh
-	@./test-integration.sh
+# Seed test data
+seed-test-data:
+	@echo "Seeding test data..."
+	@cd client && npx dotenv-cli -e ../.env -- npx prisma db execute --file ../integration/seed-test-data.sql
+	@echo "✓ Test data seeded successfully!"
+
+# Run integration tests (with auto-seed)
+test-integration: seed-test-data
+	@chmod +x integration/test-integration.sh
+	@./integration/test-integration.sh
 
 # Alias for integration tests
 test: test-integration
