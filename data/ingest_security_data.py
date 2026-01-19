@@ -1,21 +1,11 @@
 import pandas as pd
-import os
-from pathlib import Path
 from datetime import datetime
-from decimal import Decimal
-from supabase import create_client, Client
+from supabase import Client
 from typing import Optional, Dict, Any, Tuple
-from dotenv import load_dotenv
 from multiprocessing import Pool, cpu_count
-from functools import partial
+from supabase_helper import create_supabase_client, load_env
 
-# Load .env from project root (parent directory)
-# Script is in data/, so parent.parent gets us to project root
-env_path = Path(__file__).parent.parent / '.env'
-if not env_path.exists():
-    raise FileNotFoundError(f".env file not found at {env_path}. Please create it in the project root.")
-load_dotenv(env_path, override=True)  # override=True ensures .env values take precedence
-print(f"Loading environment from: {env_path}")
+load_env()
 
 def parse_date(date_str: str) -> Optional[str]:
     """Parse date string to ISO format string, handling #N/A values."""
@@ -61,25 +51,6 @@ def parse_bigint(value: Any) -> Optional[int]:
     except:
         return None
 
-def create_supabase_client() -> Client:
-    """Create and return Supabase client with service role key (bypasses RLS)."""
-    url = os.getenv('NEXT_PUBLIC_SUPABASE_URL') or os.getenv('SUPABASE_URL')
-    # Use service role key to bypass RLS for data ingestion
-    key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-    
-    if not url:
-        raise ValueError(
-            "Missing Supabase URL. Set NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL"
-        )
-    if not key:
-        raise ValueError(
-            "Missing SUPABASE_SERVICE_ROLE_KEY. "
-            "For data ingestion with RLS enabled, you need the service role key (bypasses RLS). "
-            "Get it from Supabase Dashboard > Settings > API > service_role key"
-        )
-    
-    return create_client(url, key)
-    
 def transform_row(row: pd.Series) -> Dict[str, Any]:
     """Transform CSV row to database record format matching Prisma schema (camelCase)."""
     # Use camelCase field names to match Prisma schema (no @map directives)
