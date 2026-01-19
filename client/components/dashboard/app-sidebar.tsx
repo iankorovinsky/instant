@@ -30,18 +30,95 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { createClient } from "@/lib/supabase/client";
 
-const navItems = [
-  { href: "/app/oms", label: "Orders", icon: FileText },
-  { href: "/app/ems", label: "Executions", icon: TrendingUp },
-  { href: "/app/pms", label: "Portfolios", icon: Briefcase },
-  { href: "/app/compliance", label: "Compliance", icon: Shield },
-  { href: "/app/marketdata", label: "Market Data", icon: LineChart },
-  { href: "/app/events", label: "Events", icon: History },
+interface NavSubItem {
+  href: string;
+  label: string;
+}
 
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  subItems?: NavSubItem[];
+}
+
+const navItems: NavItem[] = [
+  {
+    href: "/app/oms",
+    label: "Orders",
+    icon: FileText,
+    subItems: [
+      { href: "/app/oms", label: "Dashboard" },
+      { href: "/app/oms/orders", label: "Order Blotter" },
+    ],
+  },
+  {
+    href: "/app/ems",
+    label: "Executions",
+    icon: TrendingUp,
+    subItems: [
+      { href: "/app/ems", label: "Dashboard" },
+      { href: "/app/ems/executions", label: "Execution Tape" },
+    ],
+  },
+  {
+    href: "/app/pms",
+    label: "Portfolios",
+    icon: Briefcase,
+    subItems: [
+      { href: "/app/pms", label: "Dashboard" },
+      { href: "/app/pms/accounts", label: "Accounts" },
+      { href: "/app/pms/households", label: "Households" },
+      { href: "/app/pms/models", label: "Models" },
+      { href: "/app/pms/proposals", label: "Proposals" },
+      { href: "/app/pms/optimization", label: "Optimization" },
+      { href: "/app/pms/rebalancing", label: "Rebalancing" },
+      { href: "/app/pms/drift", label: "Drift Analysis" },
+    ],
+  },
+  {
+    href: "/app/compliance",
+    label: "Compliance",
+    icon: Shield,
+    subItems: [
+      { href: "/app/compliance", label: "Dashboard" },
+      { href: "/app/compliance/rules", label: "Rules" },
+      { href: "/app/compliance/violations", label: "Violations" },
+    ],
+  },
+  {
+    href: "/app/marketdata",
+    label: "Market Data",
+    icon: LineChart,
+    subItems: [
+      { href: "/app/marketdata", label: "Dashboard" },
+      { href: "/app/marketdata/instruments", label: "Instruments" },
+      { href: "/app/marketdata/curves", label: "Curves" },
+      { href: "/app/marketdata/pricing", label: "Pricing" },
+    ],
+  },
+  {
+    href: "/app/events",
+    label: "Events",
+    icon: History,
+    subItems: [
+      { href: "/app/events", label: "Dashboard" },
+      { href: "/app/events/timeline", label: "Timeline" },
+      { href: "/app/events/replay", label: "Replay" },
+    ],
+  },
 ];
 
 interface AppSidebarProps {
@@ -58,11 +135,14 @@ export function AppSidebar({ userEmail }: AppSidebarProps) {
     router.push("/");
   };
 
+  // Exact match only for active state
   const isActive = (href: string) => {
-    if (href === "/app") {
-      return pathname === "/app";
-    }
-    return pathname.startsWith(href);
+    return pathname === href;
+  };
+
+  // Check if category should be expanded (not styled as active)
+  const isCategoryExpanded = (item: NavItem) => {
+    return pathname === item.href || pathname.startsWith(item.href + "/");
   };
 
   return (
@@ -82,17 +162,54 @@ export function AppSidebar({ userEmail }: AppSidebarProps) {
       <SidebarContent className="p-2">
         <SidebarGroup>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton asChild isActive={isActive(item.href)} tooltip={item.label}>
-                    <Link href={item.href}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+            <SidebarMenu className="gap-3">
+              {navItems.map((item) => {
+                const expanded = isCategoryExpanded(item);
+
+                return (
+                  <Collapsible
+                    key={item.href}
+                    asChild
+                    defaultOpen={expanded}
+                    className="group/collapsible"
+                  >
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton
+                          isActive={false}
+                          tooltip={item.label}
+                          className="[&:hover]:bg-sidebar-accent [&:hover]:text-sidebar-accent-foreground text-base"
+                        >
+                          <item.icon className="h-5 w-5" />
+                          <span>{item.label}</span>
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {item.subItems?.map((subItem) => (
+                            <SidebarMenuSubItem key={subItem.href}>
+                              <Link
+                                href={subItem.href}
+                                className="block"
+                              >
+                                <span
+                                  className={`inline-flex px-2 py-1 rounded-md text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
+                                    isActive(subItem.href)
+                                      ? "bg-sidebar-active text-sidebar-active-foreground"
+                                      : ""
+                                  }`}
+                                >
+                                  {subItem.label}
+                                </span>
+                              </Link>
+                            </SidebarMenuSubItem>
+                          ))}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

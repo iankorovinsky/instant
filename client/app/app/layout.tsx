@@ -1,10 +1,11 @@
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { AppSidebar } from "@/components/dashboard/app-sidebar";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CommandMenu } from "@/components/command-menu";
+import { CommandMenu } from "@/components/dashboard/command-menu";
 
 async function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -16,11 +17,15 @@ async function AuthenticatedLayout({ children }: { children: React.ReactNode }) 
 
   const userEmail = data.claims.email as string;
 
+  // Read sidebar width from cookie
+  const cookieStore = await cookies();
+  const sidebarWidth = cookieStore.get("sidebar_width")?.value;
+
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultWidth={sidebarWidth}>
       <AppSidebar userEmail={userEmail} />
       <SidebarInset>
-        <header className="flex h-14 items-center gap-2 border-b px-4">
+        <header className="flex mt-4 items-center gap-2 px-4">
           <SidebarTrigger className="-ml-1" />
           <div className="flex-1 flex items-center justify-end">
             <CommandMenu />
