@@ -52,10 +52,12 @@ func (h *EMSQueryHandler) GetExecutions(c *gin.Context) {
 			e."settlementDate", e."settledDate",
 			e."slippageTotal", e."slippageBreakdown", e."deterministicInputs",
 			e.explanation, e."createdAt", e."updatedAt",
-			i.name as "instrumentName", i.cusip, a.name as "accountName"
+			i.name as "instrumentName", i.cusip, a.name as "accountName",
+			o."orderType", o."limitPrice", o."curveSpreadBp"
 		FROM executions e
 		LEFT JOIN instruments i ON e."instrumentId" = i.cusip
 		LEFT JOIN accounts a ON e."accountId" = a."accountId"
+		LEFT JOIN orders o ON e."orderId" = o."orderId"
 		WHERE 1=1
 	`
 
@@ -124,6 +126,9 @@ func (h *EMSQueryHandler) GetExecutions(c *gin.Context) {
 			instrumentName    sql.NullString
 			cusip             sql.NullString
 			accountName       sql.NullString
+			orderType         sql.NullString
+			limitPrice        sql.NullFloat64
+			curveSpreadBp     sql.NullFloat64
 		)
 
 		if err := rows.Scan(
@@ -134,6 +139,7 @@ func (h *EMSQueryHandler) GetExecutions(c *gin.Context) {
 			&slippageTotal, &slippageBreakdown, &deterministic,
 			&explanation, &createdAt, &updatedAt,
 			&instrumentName, &cusip, &accountName,
+			&orderType, &limitPrice, &curveSpreadBp,
 		); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -194,6 +200,15 @@ func (h *EMSQueryHandler) GetExecutions(c *gin.Context) {
 		}
 		if accountName.Valid {
 			execution["accountName"] = accountName.String
+		}
+		if orderType.Valid {
+			execution["orderType"] = orderType.String
+		}
+		if limitPrice.Valid {
+			execution["limitPrice"] = limitPrice.Float64
+		}
+		if curveSpreadBp.Valid {
+			execution["curveSpreadBp"] = curveSpreadBp.Float64
 		}
 
 		executions = append(executions, execution)
