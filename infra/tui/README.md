@@ -42,8 +42,18 @@ node run.js
 
 ## Navigation
 
-- **Arrow keys** or **Mouse** - Navigate sidebar and switch service views
+- **Arrow keys** (`↑`/`↓`) or **Mouse** - Navigate sidebar and switch service views
+- **`Tab`** - Switch focus between sidebar and log view (for scrolling)
 - **`q`** or **`Ctrl+C`** - Stop all services and exit
+
+## Scrolling Logs
+
+When focused on a log view (press `Tab` to focus):
+- **`↑`/`↓`** or **`j`/`k`** - Scroll one line up/down
+- **Page Up**/ **Page Down** or **`Ctrl+B`**/ **`Ctrl+F`** - Scroll one page up/down
+- **`Home`** or **`g`** - Jump to top of logs
+- **`End`** or **`G`** - Jump to bottom of logs
+- **Mouse wheel** - Scroll logs (when mouse is over log view)
 
 ## Services Started
 

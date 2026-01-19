@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const blessed = require('blessed');
 const contrib = require('blessed-contrib');
 const path = require('path');
@@ -8,6 +8,14 @@ const fs = require('fs');
 
 // Get project root (2 levels up from this script)
 const PROJECT_ROOT = path.resolve(__dirname, '../..');
+
+// Port mappings for services
+const SERVICE_PORTS = {
+  'temporal-server': [7233, 8088], // Temporal server + UI
+  'go-api': [8080],
+  'python-agent': [8000],
+  'nextjs-client': [3000],
+};
 
 // Service definitions
 const SERVICES = [
@@ -18,6 +26,7 @@ const SERVICES = [
     args: ['server', 'start-dev'],
     cwd: PROJECT_ROOT,
     color: 'cyan',
+    ports: SERVICE_PORTS['temporal-server'],
   },
   {
     id: 'temporal-worker',
@@ -26,6 +35,7 @@ const SERVICES = [
     args: ['run', 'main.go'],
     cwd: path.join(PROJECT_ROOT, 'services/temporal/worker'),
     color: 'blue',
+    ports: [],
   },
   {
     id: 'go-api',
@@ -34,6 +44,7 @@ const SERVICES = [
     args: ['run', 'main.go'],
     cwd: path.join(PROJECT_ROOT, 'services/api'),
     color: 'green',
+    ports: SERVICE_PORTS['go-api'],
   },
   {
     id: 'python-agent',
@@ -42,6 +53,7 @@ const SERVICES = [
     args: ['run', 'fastapi', 'dev'],
     cwd: path.join(PROJECT_ROOT, 'agent'),
     color: 'yellow',
+    ports: SERVICE_PORTS['python-agent'],
   },
   {
     id: 'nextjs-client',
@@ -50,8 +62,48 @@ const SERVICES = [
     args: ['next', 'dev'],
     cwd: path.join(PROJECT_ROOT, 'client'),
     color: 'magenta',
+    ports: SERVICE_PORTS['nextjs-client'],
   },
 ];
+
+// Function to kill process on a port
+function killProcessOnPort(port) {
+  try {
+    // Find process using the port (macOS/Linux)
+    const result = execSync(`lsof -ti:${port}`, { encoding: 'utf8', stdio: 'pipe' }).trim();
+    if (result) {
+      const pids = result.split('\n').filter(pid => pid.trim());
+      pids.forEach(pid => {
+        try {
+          execSync(`kill -9 ${pid}`, { stdio: 'pipe' });
+          console.log(`Killed process ${pid} on port ${port}`);
+        } catch (err) {
+          // Process might have already exited
+        }
+      });
+      return true;
+    }
+  } catch (err) {
+    // No process found on port, which is fine
+    return false;
+  }
+  return false;
+}
+
+// Function to kill processes on all service ports
+function killPortProcesses() {
+  const killed = [];
+  SERVICES.forEach(service => {
+    if (service.ports && service.ports.length > 0) {
+      service.ports.forEach(port => {
+        if (killProcessOnPort(port)) {
+          killed.push({ port, service: service.name });
+        }
+      });
+    }
+  });
+  return killed;
+}
 
 // Create screen
 const screen = blessed.screen({
@@ -93,6 +145,20 @@ SERVICES.forEach((service) => {
     label: ` ${service.name} `,
     fg: service.color,
     selectedFg: service.color,
+    keys: true,
+    vi: true,
+    mouse: true,
+    scrollable: true,
+    alwaysScroll: true,
+    scrollbar: {
+      ch: ' ',
+      track: {
+        bg: 'cyan'
+      },
+      style: {
+        inverse: true
+      }
+    },
     style: {
       border: {
         fg: service.color,
@@ -122,6 +188,18 @@ const colorize = (text, color) => {
   return `${colors[color] || ''}${text}${colors.reset}`;
 };
 
+// Kill processes on ports before starting services
+const killedPorts = killPortProcesses();
+if (killedPorts.length > 0) {
+  const startupLog = logs[SERVICES[0].id];
+  startupLog.log(colorize('Port cleanup:', 'yellow'));
+  killedPorts.forEach(({ port, service }) => {
+    startupLog.log(colorize(`  Killed process on port ${port} (${service})`, 'yellow'));
+  });
+  startupLog.log('');
+  screen.render();
+}
+
 // Spawn processes
 const processes = {};
 
@@ -131,6 +209,9 @@ SERVICES.forEach((service) => {
   log.log(colorize(`Starting ${service.name}...`, 'yellow'));
   log.log(`Command: ${service.cmd} ${service.args.join(' ')}`);
   log.log(`CWD: ${service.cwd}`);
+  if (service.ports && service.ports.length > 0) {
+    log.log(`Ports: ${service.ports.join(', ')}`);
+  }
   log.log('');
 
   const proc = spawn(service.cmd, service.args, {
@@ -179,6 +260,11 @@ SERVICES.forEach((service) => {
 // Function to switch view
 const switchView = (selectedId) => {
   if (selectedId !== currentView && logs[selectedId]) {
+    // Remove focus from previous log
+    if (logs[currentView]) {
+      logs[currentView].detach();
+    }
+    
     currentView = selectedId;
 
     // Hide all logs
@@ -186,6 +272,9 @@ const switchView = (selectedId) => {
 
     // Show selected log
     logs[currentView].show();
+    
+    // Focus on log for scrolling
+    logs[currentView].focus();
     screen.render();
   }
 };
@@ -225,8 +314,18 @@ sidebar.down = function () {
   }
 };
 
-// Focus sidebar for navigation
+// Focus sidebar for navigation (can Tab to log view for scrolling)
 sidebar.focus();
+
+// Add Tab key to switch focus between sidebar and log view
+screen.key(['tab'], () => {
+  if (screen.focused === sidebar) {
+    logs[currentView].focus();
+  } else {
+    sidebar.focus();
+  }
+  screen.render();
+});
 
 // Quit handler
 const quit = () => {
@@ -249,6 +348,35 @@ const quit = () => {
 };
 
 screen.key(['q', 'C-c'], quit);
+
+// Add scroll keys for log views
+SERVICES.forEach((service) => {
+  const log = logs[service.id];
+  log.key(['pageup', 'C-b'], () => {
+    log.scroll(-Math.floor(log.height * 0.8));
+    screen.render();
+  });
+  log.key(['pagedown', 'C-f'], () => {
+    log.scroll(Math.floor(log.height * 0.8));
+    screen.render();
+  });
+  log.key(['up', 'k'], () => {
+    log.scroll(-1);
+    screen.render();
+  });
+  log.key(['down', 'j'], () => {
+    log.scroll(1);
+    screen.render();
+  });
+  log.key(['home', 'g'], () => {
+    log.setScrollPerc(0);
+    screen.render();
+  });
+  log.key(['end', 'G'], () => {
+    log.setScrollPerc(100);
+    screen.render();
+  });
+});
 
 // Initial selection
 sidebar.select(0);
