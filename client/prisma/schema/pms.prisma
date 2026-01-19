@@ -5,7 +5,7 @@ enum account_type {
   joint
   trust
   ira
-  "401k"
+  k401
   corporate
 }
 
@@ -77,12 +77,15 @@ model PortfolioTarget {
   effectiveTo    DateTime?
   createdAt      DateTime     @default(now())
   createdBy      String
+  accountId      String?
 
-  model PortfolioModel? @relation(fields: [modelId], references: [modelId], onDelete: SetNull)
+  model   PortfolioModel? @relation(fields: [modelId], references: [modelId], onDelete: SetNull)
+  account Account?        @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
 
   @@map("portfolio_targets")
   @@index([scope, scopeId])
   @@index([modelId])
+  @@index([accountId])
   @@index([effectiveFrom, effectiveTo])
 }
 

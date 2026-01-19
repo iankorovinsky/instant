@@ -75,11 +75,43 @@ export default {
           light: "hsl(var(--success-light))",
           dark: "hsl(var(--success-dark))",
         },
+        /* Sidebar Colors */
+        sidebar: {
+          DEFAULT: "var(--sidebar)",
+          foreground: "var(--sidebar-foreground)",
+          primary: "var(--sidebar-primary)",
+          "primary-foreground": "var(--sidebar-primary-foreground)",
+          accent: "var(--sidebar-accent)",
+          "accent-foreground": "var(--sidebar-accent-foreground)",
+          active: "var(--sidebar-active)",
+          "active-foreground": "var(--sidebar-active-foreground)",
+          border: "var(--sidebar-border)",
+          ring: "var(--sidebar-ring)",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      keyframes: {
+        "collapsible-down": {
+          from: { height: "0", opacity: "0" },
+          to: { height: "var(--radix-collapsible-content-height)", opacity: "1" },
+        },
+        "collapsible-up": {
+          from: { height: "var(--radix-collapsible-content-height)", opacity: "1" },
+          to: { height: "0", opacity: "0" },
+        },
+      },
+      animation: {
+        "collapsible-down": "collapsible-down 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+        "collapsible-up": "collapsible-up 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+      },
+      transitionTimingFunction: {
+        "smooth": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "smooth-out": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "smooth-in": "cubic-bezier(0.4, 0, 1, 1)",
       },
     },
   },

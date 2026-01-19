@@ -26,12 +26,12 @@ import {
 } from "@/components/ui/tooltip"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
+const SIDEBAR_WIDTH_COOKIE_NAME = "sidebar_width"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH = "16rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
-const SIDEBAR_WIDTH_STORAGE_KEY = "sidebar-width"
 const SIDEBAR_MIN_WIDTH = 12 * 16 // 12rem in pixels
 const SIDEBAR_MAX_WIDTH = 32 * 16 // 32rem in pixels
 
@@ -60,6 +60,7 @@ function useSidebar() {
 
 function SidebarProvider({
   defaultOpen = true,
+  defaultWidth = SIDEBAR_WIDTH,
   open: openProp,
   onOpenChange: setOpenProp,
   className,
@@ -68,25 +69,20 @@ function SidebarProvider({
   ...props
 }: React.ComponentProps<"div"> & {
   defaultOpen?: boolean
+  defaultWidth?: string
   open?: boolean
   onOpenChange?: (open: boolean) => void
 }) {
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
 
-  // Load sidebar width from localStorage
-  const [sidebarWidth, setSidebarWidthState] = React.useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY) || SIDEBAR_WIDTH
-    }
-    return SIDEBAR_WIDTH
-  })
+  // Use the defaultWidth prop (can be set from cookie on server)
+  const [sidebarWidth, setSidebarWidthState] = React.useState<string>(defaultWidth)
 
   const setSidebarWidth = React.useCallback((width: string) => {
     setSidebarWidthState(width)
-    if (typeof window !== "undefined") {
-      localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, width)
-    }
+    // Store in cookie so server can read it
+    document.cookie = `${SIDEBAR_WIDTH_COOKIE_NAME}=${width}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
   }, [])
 
   // This is the internal state of the sidebar.

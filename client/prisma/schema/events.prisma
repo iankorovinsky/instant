@@ -1,0 +1,24 @@
+// Event Store Schema
+
+model Event {
+  eventId        String   @id @default(uuid())
+  occurredAt     DateTime @default(now())
+  eventType      String
+  aggregateType  String
+  aggregateId    String
+  correlationId  String
+  causationId    String?
+  actorId        String
+  actorRole      String
+  payload        Json
+  explanation    String?
+  schemaVersion  Int      @default(1)
+
+  @@index([occurredAt])
+  @@index([eventType])
+  @@index([aggregateType])
+  @@index([aggregateId])
+  @@index([correlationId])
+  @@index([aggregateType, aggregateId])
+  @@map("events")
+}
