@@ -17,6 +17,18 @@ const SERVICE_PORTS = {
   'nextjs-client': [3000],
 };
 
+// Check if air is installed (for hot reload)
+function hasAir() {
+  try {
+    const result = execSync('which air', { stdio: 'pipe', encoding: 'utf8' });
+    return result.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+const AIR_AVAILABLE = hasAir();
+
 // Service definitions
 const SERVICES = [
   {
@@ -31,8 +43,8 @@ const SERVICES = [
   {
     id: 'temporal-worker',
     name: 'Temporal Worker',
-    cmd: 'go',
-    args: ['run', 'main.go'],
+    cmd: AIR_AVAILABLE ? 'air' : 'go',
+    args: AIR_AVAILABLE ? [] : ['run', 'main.go'],
     cwd: path.join(PROJECT_ROOT, 'services/temporal/worker'),
     color: 'blue',
     ports: [],
@@ -40,8 +52,8 @@ const SERVICES = [
   {
     id: 'go-api',
     name: 'Go API',
-    cmd: 'go',
-    args: ['run', 'main.go'],
+    cmd: AIR_AVAILABLE ? 'air' : 'go',
+    args: AIR_AVAILABLE ? [] : ['run', 'main.go'],
     cwd: path.join(PROJECT_ROOT, 'services/api'),
     color: 'green',
     ports: SERVICE_PORTS['go-api'],
@@ -207,8 +219,16 @@ SERVICES.forEach((service) => {
   const log = logs[service.id];
   
   log.log(colorize(`Starting ${service.name}...`, 'yellow'));
-  log.log(`Command: ${service.cmd} ${service.args.join(' ')}`);
+  const cmdDisplay = service.args.length > 0 
+    ? `${service.cmd} ${service.args.join(' ')}`
+    : service.cmd;
+  log.log(`Command: ${cmdDisplay}`);
   log.log(`CWD: ${service.cwd}`);
+  if (AIR_AVAILABLE && (service.id === 'go-api' || service.id === 'temporal-worker')) {
+    log.log(colorize('Hot reload: enabled (air)', 'green'));
+  } else if (service.id === 'go-api' || service.id === 'temporal-worker') {
+    log.log(colorize('Hot reload: disabled (install air: go install github.com/air-verse/air@latest)', 'yellow'));
+  }
   if (service.ports && service.ports.length > 0) {
     log.log(`Ports: ${service.ports.join(', ')}`);
   }
