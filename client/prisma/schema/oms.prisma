@@ -1,0 +1,63 @@
+// OMS Models
+
+enum order_side {
+  BUY
+  SELL
+}
+
+enum order_type {
+  MARKET
+  LIMIT
+  CURVE_RELATIVE
+}
+
+enum time_in_force {
+  DAY
+  IOC
+}
+
+enum order_state {
+  DRAFT
+  APPROVAL_PENDING
+  APPROVED
+  SENT
+  PARTIALLY_FILLED
+  FILLED
+  CANCELLED
+  REJECTED
+  SETTLED
+}
+
+model Order {
+  orderId          String      @id @default(uuid())
+  accountId        String
+  instrumentId     String      // CUSIP reference
+  side             order_side
+  quantity         Decimal     @db.Decimal(18, 2)
+  orderType        order_type
+  limitPrice       Decimal?    @db.Decimal(10, 4)
+  curveSpreadBp    Decimal?    @db.Decimal(10, 4)
+  timeInForce      time_in_force
+  state            order_state @default(DRAFT)
+  batchId          String?
+  complianceResult Json?
+  createdAt        DateTime    @default(now())
+  createdBy        String
+  updatedAt        DateTime    @updatedAt
+  lastStateChangeAt DateTime   @default(now())
+  sentToEmsAt      DateTime?
+  fullyFilledAt    DateTime?
+  settledAt        DateTime?
+
+  // Relations
+  account    Account    @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  instrument Instrument @relation(fields: [instrumentId], references: [cusip], onDelete: Restrict)
+
+  @@map("orders")
+  @@index([accountId])
+  @@index([instrumentId])
+  @@index([state])
+  @@index([batchId])
+  @@index([createdAt])
+  @@index([lastStateChangeAt])
+}

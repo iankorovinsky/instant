@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -15,21 +16,57 @@ import {
   PendingOrdersTable,
   RecentOrdersTable,
 } from "@/components/oms";
-import {
-  orders,
-  getOrderSummary,
-} from "@/lib/oms/mock-data";
+import { useBlotter } from "@/lib/hooks/use-oms";
+import type { OrderState } from "@/lib/api/oms";
 
 export default function OMSDashboardPage() {
   const router = useRouter();
-  const summary = getOrderSummary();
+  const { data: blotterData, isLoading } = useBlotter();
+  const orders = blotterData?.orders || [];
+
+  // Compute summary from orders
+  const summary = useMemo(() => {
+    const byState: Record<OrderState, number> = {
+      DRAFT: 0,
+      APPROVAL_PENDING: 0,
+      APPROVED: 0,
+      SENT: 0,
+      PARTIALLY_FILLED: 0,
+      FILLED: 0,
+      CANCELLED: 0,
+      REJECTED: 0,
+      SETTLED: 0,
+    };
+
+    orders.forEach((order) => {
+      byState[order.state]++;
+    });
+
+    return {
+      total: orders.length,
+      byState,
+    };
+  }, [orders]);
 
   // Get recent orders (sorted by most recent)
-  const recentOrders = [...orders]
-    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+  const recentOrders = useMemo(() => {
+    return [...orders].sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+  }, [orders]);
 
   // Get orders requiring attention
-  const pendingApproval = orders.filter((o) => o.state === "APPROVAL_PENDING");
+  const pendingApproval = useMemo(() => {
+    return orders.filter((o) => o.state === "APPROVAL_PENDING");
+  }, [orders]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-3.5rem-3rem)]">
+        <p className="text-muted-foreground">Loading dashboard...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem-3rem)] space-y-6">
