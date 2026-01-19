@@ -41,8 +41,48 @@ VALUES (
 )
 ON CONFLICT (cusip) DO NOTHING;
 
+-- Insert compliance rule (global WARN on order value)
+INSERT INTO compliance_rules (
+  "ruleId",
+  "ruleKey",
+  name,
+  description,
+  version,
+  severity,
+  scope,
+  predicate,
+  "explanationTemplate",
+  "evaluationPoints",
+  status,
+  "effectiveFrom",
+  "createdAt",
+  "createdBy",
+  "updatedAt",
+  "updatedBy"
+)
+VALUES (
+  'test-compliance-rule-001',
+  'TEST_MAX_ORDER_VALUE',
+  'Test Max Order Value',
+  'Warn if order value exceeds threshold',
+  1,
+  'WARN',
+  'GLOBAL',
+  '{"metric":"order.value","operator":"<=","value":1000}',
+  'Order value {metric} exceeds test threshold {threshold}',
+  '["PRE_TRADE"]',
+  'ACTIVE',
+  NOW(),
+  NOW(),
+  'integration-test',
+  NOW(),
+  'integration-test'
+)
+ON CONFLICT ("ruleId") DO NOTHING;
+
 -- Verify data was inserted
 SELECT 'Test data seeded successfully' as message;
 SELECT 'Households:', COUNT(*) FROM households WHERE "householdId" = 'test-household-123';
 SELECT 'Accounts:', COUNT(*) FROM accounts WHERE "accountId" = 'test-account-123';
 SELECT 'Instruments:', COUNT(*) FROM instruments WHERE cusip = '912810TM6';
+SELECT 'ComplianceRules:', COUNT(*) FROM compliance_rules WHERE "ruleId" = 'test-compliance-rule-001';
