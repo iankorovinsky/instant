@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
   Search,
   Plus,
@@ -34,6 +33,16 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,23 +51,81 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  rules,
   getSeverityColor,
   getScopeColor,
   getStatusColor,
+  metricDefinitions,
+  operatorDefinitions,
   formatDate,
-  formatDateTime,
-} from "@/lib/compliance/mock-data";
-import type { RuleSeverity, RuleScope, RuleStatus, RuleGroupBy } from "@/lib/compliance/types";
+} from "@/lib/compliance/ui";
+import {
+  createComplianceRule,
+  deleteComplianceRule,
+  disableComplianceRule,
+  enableComplianceRule,
+  fetchComplianceRules,
+} from "@/lib/compliance/api";
+import type { EvaluationPoint, Rule, RuleGroupBy, RuleScope, RuleSeverity, RuleStatus } from "@/lib/compliance/types";
 
 export default function RulesPage() {
   const router = useRouter();
+  const actorId = "ui@instant.com";
 
+  const [rules, setRules] = useState<Rule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [scopeFilter, setScopeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [groupBy, setGroupBy] = useState<RuleGroupBy>("none");
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [formState, setFormState] = useState({
+    ruleKey: "",
+    name: "",
+    description: "",
+    severity: "BLOCK" as RuleSeverity,
+    scope: "GLOBAL" as RuleScope,
+    scopeId: "",
+    metric: metricDefinitions[0]?.id ?? "portfolio.duration",
+    operator: operatorDefinitions[0]?.id ?? "<=",
+    value: "",
+    explanationTemplate: "",
+    evaluationPoints: ["PRE_TRADE"] as EvaluationPoint[],
+    status: "ACTIVE" as RuleStatus,
+    effectiveFrom: "",
+    effectiveTo: "",
+    instrumentCusip: "",
+  });
+
+  useEffect(() => {
+    let active = true;
+
+    const loadRules = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchComplianceRules();
+        if (!active) return;
+        setRules(data);
+        setError(null);
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Failed to load rules");
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    loadRules();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const refreshRules = async () => {
+    const data = await fetchComplianceRules();
+    setRules(data);
+  };
 
   const filteredRules = useMemo(() => {
     return rules.filter((rule) => {
@@ -118,10 +185,117 @@ export default function RulesPage() {
     }
   };
 
+  const metricInfo = metricDefinitions.find((metric) => metric.id === formState.metric);
+
+  const resetForm = () => {
+    setFormState({
+      ruleKey: "",
+      name: "",
+      description: "",
+      severity: "BLOCK",
+      scope: "GLOBAL",
+      scopeId: "",
+      metric: metricDefinitions[0]?.id ?? "portfolio.duration",
+      operator: operatorDefinitions[0]?.id ?? "<=",
+      value: "",
+      explanationTemplate: "",
+      evaluationPoints: ["PRE_TRADE"],
+      status: "ACTIVE",
+      effectiveFrom: "",
+      effectiveTo: "",
+      instrumentCusip: "",
+    });
+  };
+
+  const handleCreateRule = async () => {
+    try {
+      const parsedValue =
+        metricInfo?.valueType === "enum"
+          ? formState.value
+          : Number.parseFloat(formState.value);
+
+      const predicate: Rule["predicate"] = {
+        metric: formState.metric,
+        operator: formState.operator,
+        value: Number.isNaN(parsedValue) ? formState.value : parsedValue,
+      };
+
+      if (formState.metric.startsWith("position.") && formState.instrumentCusip) {
+        predicate.instrumentFilter = { cusip: formState.instrumentCusip };
+      }
+
+      const effectiveFrom = formState.effectiveFrom
+        ? new Date(formState.effectiveFrom).toISOString()
+        : undefined;
+      const effectiveTo = formState.effectiveTo
+        ? new Date(formState.effectiveTo).toISOString()
+        : undefined;
+
+      await createComplianceRule({
+        ruleKey: formState.ruleKey,
+        name: formState.name,
+        description: formState.description || undefined,
+        severity: formState.severity,
+        scope: formState.scope,
+        scopeId: formState.scopeId || undefined,
+        predicate,
+        explanationTemplate: formState.explanationTemplate,
+        evaluationPoints: formState.evaluationPoints,
+        status: formState.status,
+        effectiveFrom,
+        effectiveTo,
+        createdBy: actorId,
+      });
+
+      await refreshRules();
+      setIsCreateOpen(false);
+      resetForm();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create rule");
+    }
+  };
+
+  const handleToggleStatus = async (rule: Rule) => {
+    if (rule.status === "ACTIVE") {
+      await disableComplianceRule(rule.ruleId, actorId);
+    } else {
+      await enableComplianceRule(rule.ruleId, actorId);
+    }
+    await refreshRules();
+  };
+
+  const handleDelete = async (rule: Rule) => {
+    if (!window.confirm(`Delete rule ${rule.name}? This cannot be undone.`)) {
+      return;
+    }
+    await deleteComplianceRule(rule.ruleId, actorId);
+    await refreshRules();
+  };
+
+  const toggleEvaluationPoint = (point: EvaluationPoint) => {
+    setFormState((prev) => {
+      const exists = prev.evaluationPoints.includes(point);
+      return {
+        ...prev,
+        evaluationPoints: exists
+          ? prev.evaluationPoints.filter((item) => item !== point)
+          : [...prev.evaluationPoints, point],
+      };
+    });
+  };
+
   // Summary stats
   const activeCount = rules.filter((r) => r.status === "ACTIVE").length;
   const blockCount = rules.filter((r) => r.severity === "BLOCK" && r.status === "ACTIVE").length;
   const warnCount = rules.filter((r) => r.severity === "WARN" && r.status === "ACTIVE").length;
+
+  if (loading) {
+    return <div className="text-sm text-muted-foreground">Loading rules…</div>;
+  }
+
+  if (error) {
+    return <div className="text-sm text-red-600">{error}</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -132,11 +306,229 @@ export default function RulesPage() {
             Manage compliance rules across global, household, and account scopes
           </p>
         </div>
-        <Button>
+        <Button onClick={() => setIsCreateOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Create Rule
         </Button>
       </div>
+
+      <Dialog
+        open={isCreateOpen}
+        onOpenChange={(open) => {
+          setIsCreateOpen(open);
+          if (!open) resetForm();
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Create Compliance Rule</DialogTitle>
+            <DialogDescription>
+              Define scope, predicate, and evaluation points for the new rule.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="ruleKey">Rule Key</Label>
+              <Input
+                id="ruleKey"
+                value={formState.ruleKey}
+                onChange={(e) => setFormState((prev) => ({ ...prev, ruleKey: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ruleName">Rule Name</Label>
+              <Input
+                id="ruleName"
+                value={formState.name}
+                onChange={(e) => setFormState((prev) => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="ruleDescription">Description</Label>
+              <Textarea
+                id="ruleDescription"
+                value={formState.description}
+                onChange={(e) => setFormState((prev) => ({ ...prev, description: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Severity</Label>
+              <Select
+                value={formState.severity}
+                onValueChange={(value) =>
+                  setFormState((prev) => ({ ...prev, severity: value as RuleSeverity }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Severity" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="BLOCK">Block</SelectItem>
+                  <SelectItem value="WARN">Warn</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select
+                value={formState.status}
+                onValueChange={(value) =>
+                  setFormState((prev) => ({ ...prev, status: value as RuleStatus }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ACTIVE">Active</SelectItem>
+                  <SelectItem value="INACTIVE">Inactive</SelectItem>
+                  <SelectItem value="DRAFT">Draft</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Scope</Label>
+              <Select
+                value={formState.scope}
+                onValueChange={(value) =>
+                  setFormState((prev) => ({ ...prev, scope: value as RuleScope }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Scope" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="GLOBAL">Global</SelectItem>
+                  <SelectItem value="HOUSEHOLD">Household</SelectItem>
+                  <SelectItem value="ACCOUNT">Account</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {formState.scope !== "GLOBAL" && (
+              <div className="space-y-2">
+                <Label htmlFor="scopeId">Scope Target ID</Label>
+                <Input
+                  id="scopeId"
+                  value={formState.scopeId}
+                  onChange={(e) => setFormState((prev) => ({ ...prev, scopeId: e.target.value }))}
+                />
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label>Metric</Label>
+              <Select
+                value={formState.metric}
+                onValueChange={(value) =>
+                  setFormState((prev) => ({ ...prev, metric: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Metric" />
+                </SelectTrigger>
+                <SelectContent>
+                  {metricDefinitions.map((metric) => (
+                    <SelectItem key={metric.id} value={metric.id}>
+                      {metric.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Operator</Label>
+              <Select
+                value={formState.operator}
+                onValueChange={(value) =>
+                  setFormState((prev) => ({ ...prev, operator: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Operator" />
+                </SelectTrigger>
+                <SelectContent>
+                  {operatorDefinitions.map((op) => (
+                    <SelectItem key={op.id} value={op.id}>
+                      {op.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="threshold">Threshold</Label>
+              <Input
+                id="threshold"
+                value={formState.value}
+                onChange={(e) => setFormState((prev) => ({ ...prev, value: e.target.value }))}
+              />
+            </div>
+            {formState.metric.startsWith("position.") && (
+              <div className="space-y-2">
+                <Label htmlFor="instrumentCusip">Instrument CUSIP</Label>
+                <Input
+                  id="instrumentCusip"
+                  value={formState.instrumentCusip}
+                  onChange={(e) =>
+                    setFormState((prev) => ({ ...prev, instrumentCusip: e.target.value }))
+                  }
+                />
+              </div>
+            )}
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="explanationTemplate">Explanation Template</Label>
+              <Textarea
+                id="explanationTemplate"
+                value={formState.explanationTemplate}
+                onChange={(e) =>
+                  setFormState((prev) => ({ ...prev, explanationTemplate: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>Evaluation Points</Label>
+              <div className="flex flex-wrap gap-3">
+                {(["PRE_TRADE", "PRE_EXECUTION", "POST_TRADE"] as EvaluationPoint[]).map((point) => (
+                  <label key={point} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={formState.evaluationPoints.includes(point)}
+                      onCheckedChange={() => toggleEvaluationPoint(point)}
+                    />
+                    {point.replace(/_/g, " ")}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="effectiveFrom">Effective From</Label>
+              <Input
+                id="effectiveFrom"
+                type="datetime-local"
+                value={formState.effectiveFrom}
+                onChange={(e) =>
+                  setFormState((prev) => ({ ...prev, effectiveFrom: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="effectiveTo">Effective To</Label>
+              <Input
+                id="effectiveTo"
+                type="datetime-local"
+                value={formState.effectiveTo}
+                onChange={(e) =>
+                  setFormState((prev) => ({ ...prev, effectiveTo: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateRule}>Create Rule</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-4">
@@ -346,11 +738,21 @@ export default function RulesPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={(event) => {
+                                event.preventDefault();
+                                router.push(`/app/compliance/rules/${rule.ruleId}`);
+                              }}
+                            >
                               <Edit className="mr-2 h-4 w-4" />
                               Edit Rule
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={(event) => {
+                                event.preventDefault();
+                                handleToggleStatus(rule);
+                              }}
+                            >
                               <Power className="mr-2 h-4 w-4" />
                               {rule.status === "ACTIVE" ? "Disable" : "Enable"}
                             </DropdownMenuItem>
@@ -358,6 +760,11 @@ export default function RulesPage() {
                             <DropdownMenuItem
                               className="text-destructive"
                               disabled={rule.evaluationCount > 0}
+                              onSelect={(event) => {
+                                event.preventDefault();
+                                if (rule.evaluationCount > 0) return;
+                                handleDelete(rule);
+                              }}
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
                               Delete

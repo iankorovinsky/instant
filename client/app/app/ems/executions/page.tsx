@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,11 +16,28 @@ import {
   ExecutionFilters,
   useExecutionFilters,
 } from "@/components/ems";
-import { executions } from "@/lib/ems/mock-data";
+import { fetchExecutions } from "@/lib/ems/api";
+import { executions as mockExecutions } from "@/lib/ems/mock-data";
 import type { ExecutionGroupBy } from "@/lib/ems/types";
+import type { Execution } from "@/lib/ems/types";
 
 export default function ExecutionTapePage() {
   const [groupBy, setGroupBy] = useState<ExecutionGroupBy>("none");
+  const [executions, setExecutions] = useState<Execution[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchExecutions()
+      .then((data) => {
+        if (isMounted) setExecutions(data);
+      })
+      .catch(() => {
+        if (isMounted) setExecutions(mockExecutions);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const {
     filters,
@@ -47,7 +64,7 @@ export default function ExecutionTapePage() {
   // Apply filters
   const filteredExecutions = useMemo(() => {
     return filterExecutions(executions);
-  }, [filterExecutions]);
+  }, [filterExecutions, executions]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-6rem)]">

@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Search, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,12 +14,34 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getHouseholdsWithStats, formatCurrency, formatDate } from "@/lib/pms/mock-data";
+import { formatCurrency, formatDate } from "@/lib/pms/mock-data";
+import { getHouseholds } from "@/lib/api/pms";
 
 export default function HouseholdsPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
-  const households = getHouseholdsWithStats();
+  const [households, setHouseholds] = useState<
+    Array<{
+      householdId: string;
+      name: string;
+      accountCount: number;
+      totalMarketValue: number;
+      createdAt: string;
+      lastActivity: string;
+    }>
+  >([]);
+
+  useEffect(() => {
+    const loadHouseholds = async () => {
+      try {
+        const response = await getHouseholds();
+        setHouseholds(response.households);
+      } catch (err) {
+        console.error("Failed to load households", err);
+      }
+    };
+    loadHouseholds();
+  }, []);
 
   const filteredHouseholds = households.filter((h) =>
     h.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -86,7 +107,7 @@ export default function HouseholdsPage() {
                       <div>
                         <div className="font-medium">{household.name}</div>
                         <div className="text-xs text-muted-foreground">
-                          Created {formatDate(household.createdAt)}
+                          Created {formatDate(new Date(household.createdAt))}
                         </div>
                       </div>
                     </div>
@@ -96,7 +117,7 @@ export default function HouseholdsPage() {
                     {formatCurrency(household.totalMarketValue)}
                   </TableCell>
                   <TableCell className="text-right text-muted-foreground">
-                    {formatDate(household.lastActivity)}
+                    {formatDate(new Date(household.lastActivity))}
                   </TableCell>
                 </TableRow>
               ))}

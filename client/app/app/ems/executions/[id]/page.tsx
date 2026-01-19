@@ -1,6 +1,7 @@
 "use client";
 
 import { use } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -34,8 +35,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
-  getExecutionWithFills,
-  getExecutionEvents,
   getStateColor,
   formatCurrency,
   formatQuantity,
@@ -44,6 +43,9 @@ import {
   formatPrice,
   formatBasisPoints,
 } from "@/lib/ems/mock-data";
+import { fetchExecutionById, fetchExecutionEvents } from "@/lib/ems/api";
+import { getExecutionWithFills, getExecutionEvents } from "@/lib/ems/mock-data";
+import type { ExecutionEvent, ExecutionWithFills } from "@/lib/ems/types";
 
 export default function ExecutionDetailPage({
   params,
@@ -53,8 +55,33 @@ export default function ExecutionDetailPage({
   const { id } = use(params);
   const router = useRouter();
 
-  const execution = getExecutionWithFills(id);
-  const events = getExecutionEvents(id);
+  const [execution, setExecution] = useState<ExecutionWithFills | null>(null);
+  const [events, setEvents] = useState<ExecutionEvent[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchExecutionById(id)
+      .then((data) => {
+        if (isMounted) {
+          setExecution(data ?? getExecutionWithFills(id));
+        }
+      })
+      .catch(() => {
+        if (isMounted) setExecution(getExecutionWithFills(id));
+      });
+
+    fetchExecutionEvents(id)
+      .then((data) => {
+        if (isMounted) setEvents(data);
+      })
+      .catch(() => {
+        if (isMounted) setEvents(getExecutionEvents(id));
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
 
   if (!execution) {
     return (

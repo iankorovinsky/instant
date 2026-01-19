@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Building2,
@@ -13,15 +14,8 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  getHouseholdsWithStats,
-  getAccountsWithStats,
-  portfolioModels,
-  proposals,
-  portfolioDrift,
-  formatCurrency,
-  getDriftStatus,
-} from "@/lib/pms/mock-data";
+import { formatCurrency, getDriftStatus } from "@/lib/pms/mock-data";
+import { getAccounts, getDrift, getHouseholds, getProposals } from "@/lib/api/pms";
 
 const quickLinks = [
   {
@@ -69,9 +63,28 @@ const quickLinks = [
 ];
 
 export default function PMSPage() {
-  const households = getHouseholdsWithStats();
-  const accounts = getAccountsWithStats();
-  const totalAUM = accounts.reduce((sum, a) => sum + a.marketValue, 0);
+  const [households, setHouseholds] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [proposals, setProposals] = useState<any[]>([]);
+  const [portfolioDrift, setPortfolioDrift] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadSummary = async () => {
+      try {
+        const [householdsResponse, accountsResponse, proposalsResponse, driftResponse] =
+          await Promise.all([getHouseholds(), getAccounts(), getProposals(), getDrift()]);
+        setHouseholds(householdsResponse.households);
+        setAccounts(accountsResponse.accounts);
+        setProposals(proposalsResponse.proposals);
+        setPortfolioDrift(driftResponse.drift);
+      } catch (err) {
+        console.error("Failed to load PMS summary", err);
+      }
+    };
+    loadSummary();
+  }, []);
+
+  const totalAUM = accounts.reduce((sum, a) => sum + (a.marketValue || 0), 0);
   const pendingProposals = proposals.filter((p) => p.status === "DRAFT" || p.status === "APPROVED");
   const outOfToleranceAccounts = portfolioDrift.filter(
     (d) => getDriftStatus(d.overallDrift).status === "out_of_tolerance"
@@ -182,6 +195,7 @@ export default function PMSPage() {
               {proposals.slice(0, 3).map((proposal) => {
                 const account = accounts.find((a) => a.accountId === proposal.accountId);
                 const household = households.find((h) => h.householdId === proposal.householdId);
+                const tradeCount = Array.isArray(proposal.trades) ? proposal.trades.length : 0;
                 return (
                   <div
                     key={proposal.proposalId}
@@ -192,7 +206,7 @@ export default function PMSPage() {
                         {account?.name || household?.name || "Unknown"}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {proposal.trades.length} trades - {proposal.status}
+                        {tradeCount} trades - {proposal.status}
                       </p>
                     </div>
                     <Button variant="outline" size="sm" asChild>

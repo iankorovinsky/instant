@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import {
   Shield,
   AlertTriangle,
@@ -26,19 +27,69 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
-  rules,
-  violations,
-  getComplianceSummary,
   getSeverityColor,
   getScopeColor,
   getEvaluationPointColor,
   formatDateTime,
   formatNumber,
-} from "@/lib/compliance/mock-data";
+} from "@/lib/compliance/ui";
+import { fetchComplianceRules, fetchComplianceViolations } from "@/lib/compliance/api";
+import type { Rule, Violation } from "@/lib/compliance/types";
 
 export default function ComplianceDashboardPage() {
   const router = useRouter();
-  const summary = getComplianceSummary();
+  const [rules, setRules] = useState<Rule[]>([]);
+  const [violations, setViolations] = useState<Violation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const [rulesData, violationsData] = await Promise.all([
+          fetchComplianceRules(),
+          fetchComplianceViolations(),
+        ]);
+        if (!active) return;
+        setRules(rulesData);
+        setViolations(violationsData);
+        setError(null);
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Failed to load compliance data");
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    loadData();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const summary = useMemo(() => {
+    const activeRules = rules.filter((r) => r.status === "ACTIVE");
+    const activeViolations = violations.filter((v) => v.status === "ACTIVE");
+
+    return {
+      totalRules: rules.length,
+      activeRules: activeRules.length,
+      blockRules: activeRules.filter((r) => r.severity === "BLOCK").length,
+      warnRules: activeRules.filter((r) => r.severity === "WARN").length,
+      globalRules: activeRules.filter((r) => r.scope === "GLOBAL").length,
+      householdRules: activeRules.filter((r) => r.scope === "HOUSEHOLD").length,
+      accountRules: activeRules.filter((r) => r.scope === "ACCOUNT").length,
+      activeViolations: activeViolations.length,
+      blockViolations: activeViolations.filter((v) => v.severity === "BLOCK").length,
+      warnViolations: activeViolations.filter((v) => v.severity === "WARN").length,
+      resolvedViolations: violations.filter((v) => v.status === "RESOLVED").length,
+      evaluationsToday: 0,
+    };
+  }, [rules, violations]);
 
   // Get active violations (BLOCK first, then WARN)
   const activeViolations = violations
@@ -54,6 +105,14 @@ export default function ComplianceDashboardPage() {
     .filter((r) => r.lastViolatedAt)
     .sort((a, b) => new Date(b.lastViolatedAt!).getTime() - new Date(a.lastViolatedAt!).getTime())
     .slice(0, 5);
+
+  if (loading) {
+    return <div className="text-sm text-muted-foreground">Loading compliance data…</div>;
+  }
+
+  if (error) {
+    return <div className="text-sm text-red-600">{error}</div>;
+  }
 
   return (
     <div className="space-y-6">

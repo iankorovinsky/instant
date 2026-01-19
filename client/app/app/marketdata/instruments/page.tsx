@@ -35,9 +35,9 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useCurveDates, useInstruments } from "@/lib/hooks/use-marketdata";
+import { useMarketDataAsOfDate } from "@/lib/marketdata/use-asof-date";
 import {
-  getInstrumentsWithPricing,
-  getAvailableCurveDates,
   getTypeColor,
   getBucketColor,
   formatDate,
@@ -45,7 +45,7 @@ import {
   formatYield,
   formatDuration,
   formatLargeNumber,
-} from "@/lib/marketdata/mock-data";
+} from "@/lib/marketdata/formatters";
 import type { InstrumentType, MaturityBucket, InstrumentGroupBy } from "@/lib/marketdata/types";
 
 const instrumentTypes: InstrumentType[] = ["bill", "note", "bond", "tips"];
@@ -53,56 +53,35 @@ const maturityBuckets: MaturityBucket[] = ["0-2y", "2-5y", "5-10y", "10-20y", "2
 
 export default function InstrumentsPage() {
   const router = useRouter();
-  const availableDates = getAvailableCurveDates();
-
-  const [asOfDate, setAsOfDate] = useState<Date>(availableDates[0]);
+  const { data: availableDates = [] } = useCurveDates();
+  const { asOfDate, setAsOfDate } = useMarketDataAsOfDate(availableDates);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTypes, setSelectedTypes] = useState<InstrumentType[]>([]);
   const [selectedBuckets, setSelectedBuckets] = useState<MaturityBucket[]>([]);
   const [groupBy, setGroupBy] = useState<InstrumentGroupBy>("none");
 
-  const instruments = useMemo(() => {
-    return getInstrumentsWithPricing(asOfDate);
-  }, [asOfDate]);
-
-  const filteredInstruments = useMemo(() => {
-    return instruments.filter((instrument) => {
-      // Search filter
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        const matchesCusip = instrument.cusip.toLowerCase().includes(query);
-        const matchesName = instrument.name.toLowerCase().includes(query);
-        if (!matchesCusip && !matchesName) return false;
-      }
-
-      // Type filter
-      if (selectedTypes.length > 0 && !selectedTypes.includes(instrument.type)) {
-        return false;
-      }
-
-      // Bucket filter
-      if (selectedBuckets.length > 0 && !selectedBuckets.includes(instrument.maturityBucket)) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [instruments, searchQuery, selectedTypes, selectedBuckets]);
+  const { data: instrumentsResponse, isLoading, error } = useInstruments({
+    asOfDate: asOfDate ?? undefined,
+    types: selectedTypes,
+    buckets: selectedBuckets,
+    cusip: searchQuery || undefined,
+  });
 
   const groupedInstruments = useMemo(() => {
+    const instruments = instrumentsResponse?.instruments ?? [];
     if (groupBy === "none") {
-      return { "All Instruments": filteredInstruments };
+      return { "All Instruments": instruments };
     }
 
-    return filteredInstruments.reduce((groups, instrument) => {
+    return instruments.reduce((groups, instrument) => {
       const key = groupBy === "type" ? instrument.type : instrument.maturityBucket;
       if (!groups[key]) {
         groups[key] = [];
       }
       groups[key].push(instrument);
       return groups;
-    }, {} as Record<string, typeof filteredInstruments>);
-  }, [filteredInstruments, groupBy]);
+    }, {} as Record<string, typeof instruments>);
+  }, [groupBy, instrumentsResponse?.instruments]);
 
   const toggleType = (type: InstrumentType) => {
     setSelectedTypes((prev) =>
@@ -138,8 +117,9 @@ export default function InstrumentsPage() {
             <Calendar className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm">As-of Date:</span>
             <Select
-              value={asOfDate.toISOString()}
+              value={asOfDate?.toISOString() ?? ""}
               onValueChange={(value) => setAsOfDate(new Date(value))}
+              disabled={!asOfDate}
             >
               <SelectTrigger className="w-[140px]">
                 <SelectValue />
@@ -254,12 +234,35 @@ export default function InstrumentsPage() {
       <div className="flex items-center gap-4 text-sm text-muted-foreground">
         <FileText className="h-4 w-4" />
         <span>
-          Showing {filteredInstruments.length} of {instruments.length} instruments
+          Showing {instrumentsResponse?.instruments.length ?? 0} instruments
         </span>
       </div>
 
       {/* Instruments Table */}
-      {Object.entries(groupedInstruments).map(([groupName, groupInstruments]) => (
+      {error && (
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center text-muted-foreground">
+              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium">Unable to load instruments</p>
+              <p className="text-sm">Please try again later.</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isLoading && !error && (
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center text-muted-foreground">
+              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium">Loading instruments...</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!isLoading && !error && Object.entries(groupedInstruments).map(([groupName, groupInstruments]) => (
         <Card key={groupName}>
           {groupBy !== "none" && (
             <CardHeader className="pb-3">
@@ -289,8 +292,8 @@ export default function InstrumentsPage() {
                   <TableHead>Maturity</TableHead>
                   <TableHead className="text-right">Coupon</TableHead>
                   <TableHead>Bucket</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">Yield</TableHead>
+                  <TableHead className="text-right">Evaluated Price</TableHead>
+                  <TableHead className="text-right">Evaluated Yield</TableHead>
                   <TableHead className="text-right">Duration</TableHead>
                   <TableHead className="text-right">Outstanding</TableHead>
                 </TableRow>
@@ -348,7 +351,7 @@ export default function InstrumentsPage() {
         </Card>
       ))}
 
-      {filteredInstruments.length === 0 && (
+      {!isLoading && !error && (instrumentsResponse?.instruments.length ?? 0) === 0 && (
         <Card>
           <CardContent className="py-12">
             <div className="text-center text-muted-foreground">

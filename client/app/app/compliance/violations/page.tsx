@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -42,7 +42,6 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import {
-  violations,
   getSeverityColor,
   getScopeColor,
   getEvaluationPointColor,
@@ -50,16 +49,22 @@ import {
   formatDateTime,
   formatNumber,
   formatCurrency,
-} from "@/lib/compliance/mock-data";
+} from "@/lib/compliance/ui";
+import { fetchComplianceViolations } from "@/lib/compliance/api";
 import type { RuleSeverity, RuleScope, ViolationStatus, EvaluationPoint, ViolationGroupBy, Violation } from "@/lib/compliance/types";
 
 export default function ViolationsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const [violations, setViolations] = useState<Violation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   // Get initial filters from URL
   const initialSeverity = searchParams.get("severity") || "all";
   const initialRuleId = searchParams.get("ruleId") || "";
+  const initialViolationId = searchParams.get("id");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [severityFilter, setSeverityFilter] = useState<string>(initialSeverity);
@@ -68,6 +73,40 @@ export default function ViolationsPage() {
   const [evaluationPointFilter, setEvaluationPointFilter] = useState<string>("all");
   const [groupBy, setGroupBy] = useState<ViolationGroupBy>("none");
   const [selectedViolation, setSelectedViolation] = useState<Violation | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadViolations = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchComplianceViolations();
+        if (!active) return;
+        setViolations(data);
+        setError(null);
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Failed to load violations");
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    loadViolations();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!initialViolationId || violations.length === 0) {
+      return;
+    }
+    const match = violations.find((violation) => violation.violationId === initialViolationId);
+    if (match) {
+      setSelectedViolation(match);
+    }
+  }, [initialViolationId, violations]);
 
   const filteredViolations = useMemo(() => {
     return violations.filter((violation) => {
@@ -138,6 +177,14 @@ export default function ViolationsPage() {
   const blockViolations = activeViolations.filter((v) => v.severity === "BLOCK");
   const warnViolations = activeViolations.filter((v) => v.severity === "WARN");
   const resolvedViolations = violations.filter((v) => v.status === "RESOLVED");
+
+  if (loading) {
+    return <div className="text-sm text-muted-foreground">Loading violations…</div>;
+  }
+
+  if (error) {
+    return <div className="text-sm text-red-600">{error}</div>;
+  }
 
   return (
     <div className="space-y-6">

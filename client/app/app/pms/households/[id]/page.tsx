@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Plus, TrendingUp, Building2, Briefcase } from "lucide-react";
@@ -15,14 +15,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import {
-  households,
-  accounts,
-  positions,
-  getHouseholdAnalytics,
-  formatCurrency,
-  formatDate,
-} from "@/lib/pms/mock-data";
+import { formatCurrency, formatDate } from "@/lib/pms/mock-data";
+import { getHouseholdView } from "@/lib/api/pms";
 
 export default function HouseholdDetailPage({
   params,
@@ -31,30 +25,30 @@ export default function HouseholdDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const [householdView, setHouseholdView] = useState<any | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const household = households.find((h) => h.householdId === id);
-  const householdAccounts = accounts.filter((a) => a.householdId === id);
-  const analytics = getHouseholdAnalytics(id);
+  useEffect(() => {
+    const loadHousehold = async () => {
+      setIsLoading(true);
+      try {
+        const view = await getHouseholdView(id);
+        setHouseholdView(view);
+      } catch (err) {
+        console.error("Failed to load household view", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadHousehold();
+  }, [id]);
 
-  // Get aggregated positions
-  const householdPositions = positions.filter((p) =>
-    householdAccounts.some((a) => a.accountId === p.accountId)
-  );
+  const household = householdView?.household;
+  const householdAccounts = householdView?.accounts || [];
+  const analytics = householdView?.analytics;
+  const aggregatedPositions = householdView?.positions || [];
 
-  // Aggregate positions by CUSIP
-  const aggregatedPositions = householdPositions.reduce((acc, pos) => {
-    const existing = acc.find((p) => p.cusip === pos.cusip);
-    if (existing) {
-      existing.quantity += pos.quantity;
-      existing.marketValue += pos.marketValue;
-      existing.dv01 += pos.dv01;
-    } else {
-      acc.push({ ...pos });
-    }
-    return acc;
-  }, [] as typeof householdPositions);
-
-  if (!household) {
+  if (!household && !isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-96">
         <p className="text-muted-foreground">Household not found</p>
@@ -81,10 +75,12 @@ export default function HouseholdDetailPage({
                 <Building2 className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold tracking-tight">{household.name}</h1>
-                <p className="text-sm text-muted-foreground">
-                  Created {formatDate(household.createdAt)}
-                </p>
+                <h1 className="text-2xl font-bold tracking-tight">{household?.name}</h1>
+                {household?.createdAt && (
+                  <p className="text-sm text-muted-foreground">
+                    Created {formatDate(new Date(household.createdAt))}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -108,10 +104,16 @@ export default function HouseholdDetailPage({
             <CardTitle className="text-sm font-medium">Total Market Value</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(analytics.totalMarketValue)}</div>
-            <p className="text-xs text-muted-foreground">
-              Cash: {formatCurrency(analytics.cashBalance)} ({analytics.cashPercentage}%)
-            </p>
+            {analytics ? (
+              <>
+                <div className="text-2xl font-bold">{formatCurrency(analytics.totalMarketValue)}</div>
+                <p className="text-xs text-muted-foreground">
+                  Cash: {formatCurrency(analytics.cashBalance)} ({analytics.cashPercentage}%)
+                </p>
+              </>
+            ) : (
+              <div className="text-sm text-muted-foreground">Loading...</div>
+            )}
           </CardContent>
         </Card>
 
@@ -120,7 +122,9 @@ export default function HouseholdDetailPage({
             <CardTitle className="text-sm font-medium">Portfolio Duration</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{analytics.totalDuration.toFixed(2)} years</div>
+            <div className="text-2xl font-bold">
+              {analytics ? `${analytics.totalDuration.toFixed(2)} years` : "--"}
+            </div>
             <p className="text-xs text-muted-foreground">Weighted average</p>
           </CardContent>
         </Card>
@@ -130,7 +134,9 @@ export default function HouseholdDetailPage({
             <CardTitle className="text-sm font-medium">Total DV01</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(analytics.totalDv01)}</div>
+            <div className="text-2xl font-bold">
+              {analytics ? formatCurrency(analytics.totalDv01) : "--"}
+            </div>
             <p className="text-xs text-muted-foreground">Dollar value of 1bp</p>
           </CardContent>
         </Card>
@@ -156,20 +162,21 @@ export default function HouseholdDetailPage({
         </CardHeader>
         <CardContent>
           <div className="flex gap-2">
-            {Object.entries(analytics.bucketWeights).map(([bucket, weight]) => (
-              <div key={bucket} className="flex-1">
-                <div className="text-center mb-2">
-                  <div className="text-sm font-medium">{bucket}</div>
-                  <div className="text-2xl font-bold">{weight}%</div>
+            {analytics &&
+              Object.entries(analytics.bucketWeights).map(([bucket, weight]) => (
+                <div key={bucket} className="flex-1">
+                  <div className="text-center mb-2">
+                    <div className="text-sm font-medium">{bucket}</div>
+                    <div className="text-2xl font-bold">{weight}%</div>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full"
+                      style={{ width: `${weight}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary rounded-full"
-                    style={{ width: `${weight}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+              ))}
           </div>
         </CardContent>
       </Card>
@@ -191,9 +198,8 @@ export default function HouseholdDetailPage({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {householdAccounts.map((account) => {
-                const accountPositions = positions.filter((p) => p.accountId === account.accountId);
-                const marketValue = accountPositions.reduce((sum, p) => sum + p.marketValue, 0);
+              {householdAccounts.map((account: any) => {
+                const marketValue = account.marketValue || 0;
                 return (
                   <TableRow
                     key={account.accountId}

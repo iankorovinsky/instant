@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -28,14 +28,14 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { portfolioModels, formatCurrency } from "@/lib/pms/mock-data";
 import {
-  households,
-  accounts,
-  portfolioModels,
-  getAccountAnalytics,
-  getHouseholdAnalytics,
-  formatCurrency,
-} from "@/lib/pms/mock-data";
+  getAccountView,
+  getAccounts,
+  getHouseholdView,
+  getHouseholds,
+  runOptimization,
+} from "@/lib/api/pms";
 import { BucketWeights } from "@/lib/pms/types";
 
 type OptimizationScope = "account" | "household";
@@ -59,17 +59,59 @@ export default function OptimizationPage() {
   const [maxTurnover, setMaxTurnover] = useState<number>(20);
   const [assumptions, setAssumptions] = useState<string>("");
   const [isRunning, setIsRunning] = useState(false);
+  const [accounts, setAccounts] = useState<Array<{ accountId: string; name: string }>>([]);
+  const [households, setHouseholds] = useState<Array<{ householdId: string; name: string }>>([]);
+  const [currentAnalytics, setCurrentAnalytics] = useState<any | null>(null);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
 
   const selectedAccount = accounts.find((a) => a.accountId === selectedAccountId);
   const selectedHousehold = households.find((h) => h.householdId === selectedHouseholdId);
   const selectedModel = portfolioModels.find((m) => m.modelId === selectedModelId);
 
-  const currentAnalytics =
-    scope === "account" && selectedAccountId
-      ? getAccountAnalytics(selectedAccountId)
-      : scope === "household" && selectedHouseholdId
-      ? getHouseholdAnalytics(selectedHouseholdId)
-      : null;
+  useEffect(() => {
+    const loadLists = async () => {
+      try {
+        const [accountsResponse, householdsResponse] = await Promise.all([
+          getAccounts(),
+          getHouseholds(),
+        ]);
+        setAccounts(accountsResponse.accounts);
+        setHouseholds(householdsResponse.households);
+      } catch (err) {
+        console.error("Failed to load PMS lists", err);
+      }
+    };
+    loadLists();
+  }, []);
+
+  useEffect(() => {
+    const loadAnalytics = async () => {
+      setCurrentAnalytics(null);
+      if (scope === "account" && selectedAccountId) {
+        setIsLoadingAnalytics(true);
+        try {
+          const view = await getAccountView(selectedAccountId);
+          setCurrentAnalytics(view.analytics);
+        } catch (err) {
+          console.error("Failed to load account analytics", err);
+        } finally {
+          setIsLoadingAnalytics(false);
+        }
+      }
+      if (scope === "household" && selectedHouseholdId) {
+        setIsLoadingAnalytics(true);
+        try {
+          const view = await getHouseholdView(selectedHouseholdId);
+          setCurrentAnalytics(view.analytics);
+        } catch (err) {
+          console.error("Failed to load household analytics", err);
+        } finally {
+          setIsLoadingAnalytics(false);
+        }
+      }
+    };
+    loadAnalytics();
+  }, [scope, selectedAccountId, selectedHouseholdId]);
 
   const handleModelSelect = (modelId: string) => {
     setSelectedModelId(modelId);
@@ -105,14 +147,29 @@ export default function OptimizationPage() {
 
   const totalWeight = Object.values(bucketWeights).reduce((sum, w) => sum + w, 0);
 
-  const handleRunOptimization = () => {
+  const handleRunOptimization = async () => {
+    if (!isValid) return;
     setIsRunning(true);
-    // Simulate optimization delay
-    setTimeout(() => {
+    try {
+      const response = await runOptimization({
+        scope,
+        scopeId: scope === "account" ? selectedAccountId : selectedHouseholdId,
+        modelId: selectedModelId || undefined,
+        durationTarget,
+        bucketWeights,
+        constraints: {
+          maxPositionSize,
+          maxTurnover,
+        },
+        assumptions,
+        requestedBy: "advisor@instant.com",
+      });
+      router.push(`/app/pms/proposals/${response.proposalId}`);
+    } catch (err) {
+      console.error("Optimization failed", err);
+    } finally {
       setIsRunning(false);
-      // In a real app, this would navigate to the generated proposal
-      router.push("/app/pms/proposals");
-    }, 2000);
+    }
   };
 
   const isValid =
@@ -448,6 +505,10 @@ export default function OptimizationPage() {
                     </span>
                   </div>
                 </div>
+              ) : isLoadingAnalytics ? (
+                <p className="text-muted-foreground text-center py-8">
+                  Loading current metrics...
+                </p>
               ) : (
                 <p className="text-muted-foreground text-center py-8">
                   Select a {scope} to view current metrics

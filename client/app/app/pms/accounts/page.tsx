@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Briefcase } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -21,13 +21,42 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getAccountsWithStats, households, formatCurrency, formatDate } from "@/lib/pms/mock-data";
+import { formatCurrency, formatDate } from "@/lib/pms/mock-data";
+import { getAccounts, getHouseholds } from "@/lib/api/pms";
 
 export default function AccountsPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [householdFilter, setHouseholdFilter] = useState<string>("all");
-  const accounts = getAccountsWithStats();
+  const [accounts, setAccounts] = useState<
+    Array<{
+      accountId: string;
+      householdId: string;
+      name: string;
+      accountType: string;
+      householdName?: string;
+      marketValue: number;
+      duration: number;
+      lastActivity: string;
+    }>
+  >([]);
+  const [households, setHouseholds] = useState<Array<{ householdId: string; name: string }>>([]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [accountsResponse, householdsResponse] = await Promise.all([
+          getAccounts(),
+          getHouseholds(),
+        ]);
+        setAccounts(accountsResponse.accounts);
+        setHouseholds(householdsResponse.households);
+      } catch (err) {
+        console.error("Failed to load accounts", err);
+      }
+    };
+    loadData();
+  }, []);
 
   const filteredAccounts = accounts.filter((account) => {
     const matchesSearch = account.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -118,7 +147,7 @@ export default function AccountsPage() {
                   </TableCell>
                   <TableCell className="text-right">{account.duration.toFixed(2)}y</TableCell>
                   <TableCell className="text-right text-muted-foreground">
-                    {formatDate(account.lastActivity)}
+                    {formatDate(new Date(account.lastActivity))}
                   </TableCell>
                 </TableRow>
               ))}

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   Clock,
@@ -15,14 +16,31 @@ import {
   CompletedExecutionsTable,
 } from "@/components/ems";
 import {
-  executions,
-  getExecutionSummary,
   formatCurrency,
 } from "@/lib/ems/mock-data";
+import { fetchExecutions, summarizeExecutions } from "@/lib/ems/api";
+import { executions as mockExecutions } from "@/lib/ems/mock-data";
+import type { Execution } from "@/lib/ems/types";
 
 export default function EMSDashboardPage() {
   const router = useRouter();
-  const summary = getExecutionSummary();
+  const [executions, setExecutions] = useState<Execution[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchExecutions()
+      .then((data) => {
+        if (isMounted) setExecutions(data);
+      })
+      .catch(() => {
+        if (isMounted) setExecutions(mockExecutions);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const summary = useMemo(() => summarizeExecutions(executions), [executions]);
 
   // Get active executions (pending, simulating, partially filled)
   const activeExecutions = executions.filter(

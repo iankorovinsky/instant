@@ -23,10 +23,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { useInstruments, useMarketDataSummary, useYieldCurve } from "@/lib/hooks/use-marketdata";
 import {
-  getMarketDataSummary,
-  getInstrumentsWithPricing,
-  yieldCurves,
   getTypeColor,
   getBucketColor,
   formatDate,
@@ -34,13 +32,18 @@ import {
   formatPrice,
   formatYield,
   formatDuration,
-} from "@/lib/marketdata/mock-data";
+} from "@/lib/marketdata/formatters";
 
 export default function MarketDataDashboardPage() {
   const router = useRouter();
-  const summary = getMarketDataSummary();
-  const latestCurve = yieldCurves[0];
-  const instrumentsWithPricing = getInstrumentsWithPricing().slice(0, 8);
+  const { data: summary } = useMarketDataSummary();
+  const latestCurveDate = summary?.latestCurveDate ?? undefined;
+  const { data: latestCurve } = useYieldCurve(latestCurveDate);
+  const { data: instrumentsResponse } = useInstruments({
+    asOfDate: latestCurveDate,
+    limit: 8,
+  });
+  const instrumentsWithPricing = instrumentsResponse?.instruments ?? [];
 
   return (
     <div className="space-y-6">
@@ -54,7 +57,7 @@ export default function MarketDataDashboardPage() {
         <div className="flex items-center gap-2 bg-muted/50 px-4 py-2 rounded-lg">
           <Calendar className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm">Pricing as-of:</span>
-          <span className="font-medium">{summary.latestCurveDate ? formatDate(summary.latestCurveDate) : "N/A"}</span>
+          <span className="font-medium">{summary?.latestCurveDate ? formatDate(summary.latestCurveDate) : "N/A"}</span>
         </div>
       </div>
 
@@ -66,9 +69,9 @@ export default function MarketDataDashboardPage() {
             <FileText className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{summary.totalInstruments}</div>
+            <div className="text-2xl font-bold">{summary?.totalInstruments ?? 0}</div>
             <p className="text-xs text-muted-foreground">
-              {summary.billCount} bills, {summary.noteCount} notes, {summary.bondCount} bonds
+              {summary?.billCount ?? 0} bills, {summary?.noteCount ?? 0} notes, {summary?.bondCount ?? 0} bonds
             </p>
           </CardContent>
         </Card>
@@ -79,9 +82,9 @@ export default function MarketDataDashboardPage() {
             <TrendingUp className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{summary.availableCurveDates.length}</div>
+            <div className="text-2xl font-bold">{summary?.availableCurveDates.length ?? 0}</div>
             <p className="text-xs text-muted-foreground">
-              Latest: {summary.latestCurveDate ? formatDate(summary.latestCurveDate) : "None"}
+              Latest: {summary?.latestCurveDate ? formatDate(summary.latestCurveDate) : "None"}
             </p>
           </CardContent>
         </Card>
@@ -93,7 +96,7 @@ export default function MarketDataDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {latestCurve?.curvePoints.find((p) => p.tenor === "10Y")?.parYield.toFixed(2)}%
+              {latestCurve?.curvePoints.find((p) => p.tenor === "10Y")?.parYield.toFixed(2) ?? "N/A"}%
             </div>
             <p className="text-xs text-muted-foreground">
               As of {latestCurve ? formatDate(latestCurve.asOfDate) : "N/A"}
@@ -107,7 +110,7 @@ export default function MarketDataDashboardPage() {
             <DollarSign className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{summary.tipsCount}</div>
+            <div className="text-2xl font-bold">{summary?.tipsCount ?? 0}</div>
             <p className="text-xs text-muted-foreground">
               Inflation-protected securities
             </p>
@@ -128,7 +131,7 @@ export default function MarketDataDashboardPage() {
             <div className="flex-1">
               <CardTitle className="text-base">Instruments</CardTitle>
               <CardDescription>
-                {summary.totalInstruments} UST securities
+                {summary?.totalInstruments ?? 0} UST securities
               </CardDescription>
             </div>
             <ArrowRight className="h-5 w-5 text-muted-foreground" />
@@ -180,13 +183,13 @@ export default function MarketDataDashboardPage() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-5">
-            {Object.entries(summary.bucketCounts).map(([bucket, count]) => (
+            {Object.entries(summary?.bucketCounts ?? {}).map(([bucket, count]) => (
               <div key={bucket} className="text-center">
                 <div className="text-sm font-medium mb-2">{bucket}</div>
                 <div className="h-24 bg-muted rounded relative overflow-hidden">
                   <div
                     className="absolute bottom-0 left-0 right-0 bg-primary rounded"
-                    style={{ height: `${Math.min((count / summary.totalInstruments) * 100 * 3, 100)}%` }}
+                    style={{ height: `${Math.min((count / Math.max(summary?.totalInstruments ?? 1, 1)) * 100 * 3, 100)}%` }}
                   />
                 </div>
                 <div className="mt-2">

@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useMemo } from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -36,36 +35,26 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  yieldCurves,
-  getAvailableCurveDates,
-  formatDate,
-  formatDateTime,
-  formatYield,
-} from "@/lib/marketdata/mock-data";
-import type { Tenor, YieldCurve } from "@/lib/marketdata/types";
+import { useCurveDates, useYieldCurve } from "@/lib/hooks/use-marketdata";
+import { useMarketDataAsOfDate } from "@/lib/marketdata/use-asof-date";
+import { formatDate, formatDateTime, formatYield } from "@/lib/marketdata/formatters";
+import type { Tenor } from "@/lib/marketdata/types";
 
 const tenorOrder: Tenor[] = ["1M", "3M", "6M", "1Y", "2Y", "3Y", "5Y", "7Y", "10Y", "20Y", "30Y"];
 
 export default function YieldCurvesPage() {
-  const router = useRouter();
-  const availableDates = getAvailableCurveDates();
+  const { data: availableDates = [] } = useCurveDates();
+  const { asOfDate: selectedDate, setAsOfDate: setSelectedDate } = useMarketDataAsOfDate(availableDates);
+  const [compareDate, setCompareDate] = useState<Date | null>(null);
 
-  const [selectedDate, setSelectedDate] = useState<Date>(availableDates[0]);
-  const [compareDate, setCompareDate] = useState<Date | null>(availableDates[1] || null);
+  const { data: selectedCurve, isLoading: curveLoading } = useYieldCurve(selectedDate ?? undefined);
+  const { data: compareCurve } = useYieldCurve(compareDate ?? undefined);
 
-  const selectedCurve = useMemo(() => {
-    return yieldCurves.find(
-      (c) => c.asOfDate.toDateString() === selectedDate.toDateString()
-    );
-  }, [selectedDate]);
-
-  const compareCurve = useMemo(() => {
-    if (!compareDate) return null;
-    return yieldCurves.find(
-      (c) => c.asOfDate.toDateString() === compareDate.toDateString()
-    );
-  }, [compareDate]);
+  useEffect(() => {
+    if (!compareDate && availableDates.length > 1) {
+      setCompareDate(availableDates[1]);
+    }
+  }, [availableDates, compareDate]);
 
   // Calculate comparison data
   const comparisonData = useMemo(() => {
@@ -116,6 +105,17 @@ export default function YieldCurvesPage() {
     };
   }, [selectedCurve]);
 
+  const historyRows = useMemo(() => {
+    return availableDates.map((date) => {
+      const isSelected =
+        selectedDate && date.toDateString() === selectedDate.toDateString();
+      return {
+        date,
+        curve: isSelected ? selectedCurve : null,
+      };
+    });
+  }, [availableDates, selectedCurve, selectedDate]);
+
   const getChangeIcon = (change: number | null) => {
     if (change === null) return <Minus className="h-4 w-4 text-muted-foreground" />;
     if (change > 0) return <ArrowUpRight className="h-4 w-4 text-red-500" />;
@@ -153,8 +153,9 @@ export default function YieldCurvesPage() {
               <Calendar className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm font-medium">Primary Curve:</span>
               <Select
-                value={selectedDate.toISOString()}
+                value={selectedDate?.toISOString() ?? ""}
                 onValueChange={(value) => setSelectedDate(new Date(value))}
+                disabled={!selectedDate}
               >
                 <SelectTrigger className="w-[140px]">
                   <SelectValue />
@@ -183,7 +184,9 @@ export default function YieldCurvesPage() {
                 <SelectContent>
                   <SelectItem value="none">No comparison</SelectItem>
                   {availableDates
-                    .filter((d) => d.toISOString() !== selectedDate.toISOString())
+                    .filter((d) =>
+                      selectedDate ? d.toISOString() !== selectedDate.toISOString() : true
+                    )
                     .map((date) => (
                       <SelectItem key={date.toISOString()} value={date.toISOString()}>
                         {formatDate(date)}
@@ -195,6 +198,21 @@ export default function YieldCurvesPage() {
           </div>
         </CardContent>
       </Card>
+
+      {selectedCurve && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground">
+              <span>
+                Viewing curve as-of <span className="text-foreground">{formatDate(selectedCurve.asOfDate)}</span>
+              </span>
+              <span>Source: {selectedCurve.source.sourceUrl || "FRED"}</span>
+              <span>Ingested: {formatDateTime(selectedCurve.source.ingestedAt)}</span>
+              <span>Points: {selectedCurve.curvePoints.length}</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Curve Statistics */}
       {curveStats && (
@@ -297,43 +315,55 @@ export default function YieldCurvesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="h-64 flex items-end justify-between gap-2">
-            {comparisonData.map((point) => {
-              const maxYield = 6; // Max for scaling
-              const heightPercent = (point.currentYield / maxYield) * 100;
-              const compareHeightPercent = point.compareYield
-                ? (point.compareYield / maxYield) * 100
-                : 0;
+          {curveLoading && (
+            <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
+              Loading curve data...
+            </div>
+          )}
+          {!curveLoading && !selectedCurve && (
+            <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
+              No curve data available for this date.
+            </div>
+          )}
+          {!curveLoading && selectedCurve && (
+            <div className="h-64 flex items-end justify-between gap-2">
+              {comparisonData.map((point) => {
+                const maxYield = 6; // Max for scaling
+                const heightPercent = (point.currentYield / maxYield) * 100;
+                const compareHeightPercent = point.compareYield
+                  ? (point.compareYield / maxYield) * 100
+                  : 0;
 
-              return (
-                <div key={point.tenor} className="flex-1 flex flex-col items-center gap-1">
-                  <div className="w-full h-48 relative flex items-end justify-center gap-1">
-                    {compareCurve && (
+                return (
+                  <div key={point.tenor} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-full h-48 relative flex items-end justify-center gap-1">
+                      {compareCurve && (
+                        <div
+                          className="w-1/3 bg-gray-300 rounded-t transition-all"
+                          style={{ height: `${compareHeightPercent}%` }}
+                        />
+                      )}
                       <div
-                        className="w-1/3 bg-gray-300 rounded-t transition-all"
-                        style={{ height: `${compareHeightPercent}%` }}
+                        className="w-1/3 bg-primary rounded-t transition-all"
+                        style={{ height: `${heightPercent}%` }}
                       />
-                    )}
-                    <div
-                      className="w-1/3 bg-primary rounded-t transition-all"
-                      style={{ height: `${heightPercent}%` }}
-                    />
+                    </div>
+                    <div className="text-xs font-medium text-center">
+                      {point.currentYield.toFixed(2)}%
+                    </div>
+                    <div className="text-xs text-muted-foreground font-medium">
+                      {point.tenor}
+                    </div>
                   </div>
-                  <div className="text-xs font-medium text-center">
-                    {point.currentYield.toFixed(2)}%
-                  </div>
-                  <div className="text-xs text-muted-foreground font-medium">
-                    {point.tenor}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
           {compareCurve && (
             <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t">
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-primary rounded" />
-                <span className="text-sm">{formatDate(selectedDate)}</span>
+                <span className="text-sm">{selectedDate ? formatDate(selectedDate) : "N/A"}</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-gray-300 rounded" />
@@ -421,35 +451,35 @@ export default function YieldCurvesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {yieldCurves.map((curve) => (
+              {historyRows.map(({ date, curve }) => (
                 <TableRow
-                  key={curve.asOfDate.toISOString()}
+                  key={date.toISOString()}
                   className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => setSelectedDate(curve.asOfDate)}
+                  onClick={() => setSelectedDate(date)}
                 >
                   <TableCell className="font-medium">
-                    {formatDate(curve.asOfDate)}
-                    {curve.asOfDate.toDateString() === selectedDate.toDateString() && (
+                    {formatDate(date)}
+                    {selectedDate && date.toDateString() === selectedDate.toDateString() && (
                       <Badge variant="secondary" className="ml-2">Selected</Badge>
                     )}
                   </TableCell>
                   <TableCell className="text-right font-mono">
-                    {curve.curvePoints.find((p) => p.tenor === "2Y")?.parYield.toFixed(2)}%
+                    {curve?.curvePoints.find((p) => p.tenor === "2Y")?.parYield.toFixed(2) ?? "-"}
                   </TableCell>
                   <TableCell className="text-right font-mono">
-                    {curve.curvePoints.find((p) => p.tenor === "5Y")?.parYield.toFixed(2)}%
+                    {curve?.curvePoints.find((p) => p.tenor === "5Y")?.parYield.toFixed(2) ?? "-"}
                   </TableCell>
                   <TableCell className="text-right font-mono">
-                    {curve.curvePoints.find((p) => p.tenor === "10Y")?.parYield.toFixed(2)}%
+                    {curve?.curvePoints.find((p) => p.tenor === "10Y")?.parYield.toFixed(2) ?? "-"}
                   </TableCell>
                   <TableCell className="text-right font-mono">
-                    {curve.curvePoints.find((p) => p.tenor === "30Y")?.parYield.toFixed(2)}%
+                    {curve?.curvePoints.find((p) => p.tenor === "30Y")?.parYield.toFixed(2) ?? "-"}
                   </TableCell>
                   <TableCell className="text-sm truncate max-w-[150px]">
-                    {curve.source.ingestedBy}
+                    {curve?.source.ingestedBy ?? "N/A"}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {formatDateTime(curve.source.ingestedAt)}
+                    {curve?.source.ingestedAt ? formatDateTime(curve.source.ingestedAt) : "-"}
                   </TableCell>
                 </TableRow>
               ))}

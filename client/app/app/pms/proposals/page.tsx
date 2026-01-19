@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Search, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,8 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { proposals, accounts, households, formatDate, formatCurrency } from "@/lib/pms/mock-data";
+import { formatDate, formatCurrency } from "@/lib/pms/mock-data";
+import { getAccounts, getHouseholds, getProposals } from "@/lib/api/pms";
 import type { ProposalTrade } from "@/lib/pms/types";
 
 const statusColors: Record<string, string> = {
@@ -37,6 +38,27 @@ export default function ProposalsPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [proposals, setProposals] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [households, setHouseholds] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [proposalsResponse, accountsResponse, householdsResponse] = await Promise.all([
+          getProposals(),
+          getAccounts(),
+          getHouseholds(),
+        ]);
+        setProposals(proposalsResponse.proposals);
+        setAccounts(accountsResponse.accounts);
+        setHouseholds(householdsResponse.households);
+      } catch (err) {
+        console.error("Failed to load proposals", err);
+      }
+    };
+    loadData();
+  }, []);
 
   const filteredProposals = proposals.filter((proposal) => {
     const account = proposal.accountId
@@ -172,7 +194,8 @@ export default function ProposalsPage() {
                   ? households.find((h) => h.householdId === account.householdId)
                   : null;
 
-                const totalNotional = proposal.trades.reduce(
+                const trades = Array.isArray(proposal.trades) ? proposal.trades : [];
+                const totalNotional = trades.reduce(
                   (sum: number, t: ProposalTrade) => sum + t.estimatedValue,
                   0
                 );
@@ -193,7 +216,7 @@ export default function ProposalsPage() {
                             {proposal.proposalId}
                           </span>
                           <p className="text-xs text-muted-foreground">
-                            As of {formatDate(proposal.asOfDate)}
+                            As of {formatDate(new Date(proposal.asOfDate))}
                           </p>
                         </div>
                       </div>
