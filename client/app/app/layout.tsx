@@ -6,6 +6,7 @@ import { AppSidebar } from "@/components/dashboard/app-sidebar";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CommandMenu } from "@/components/dashboard/command-menu";
+import { QueryProvider } from "@/components/providers/query-provider";
 
 async function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -22,20 +23,22 @@ async function AuthenticatedLayout({ children }: { children: React.ReactNode }) 
   const sidebarWidth = cookieStore.get("sidebar_width")?.value;
 
   return (
-    <SidebarProvider defaultWidth={sidebarWidth}>
-      <AppSidebar userEmail={userEmail} />
-      <SidebarInset>
-        <header className="flex mt-4 items-center gap-2 px-4">
-          <SidebarTrigger className="-ml-1" />
-          <div className="flex-1 flex items-center justify-end">
-            <CommandMenu />
+    <QueryProvider>
+      <SidebarProvider defaultWidth={sidebarWidth}>
+        <AppSidebar userEmail={userEmail} />
+        <SidebarInset>
+          <header className="flex mt-4 items-center gap-2 px-4">
+            <SidebarTrigger className="-ml-1" />
+            <div className="flex-1 flex items-center justify-end">
+              <CommandMenu />
+            </div>
+          </header>
+          <div className="p-6">
+            {children}
           </div>
-        </header>
-        <div className="p-6">
-          {children}
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+        </SidebarInset>
+      </SidebarProvider>
+    </QueryProvider>
   );
 }
 

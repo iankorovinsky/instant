@@ -25,7 +25,7 @@ import {
   OrderFilters,
   useOrderFilters,
 } from "@/components/oms";
-import { orders } from "@/lib/oms/mock-data";
+import { useBlotter, useApproveOrder, useCancelOrder, useSendToEMS } from "@/lib/hooks/use-oms";
 import type { OrderGroupBy } from "@/lib/oms/types";
 
 export default function OrderBlotterPage() {
@@ -45,10 +45,19 @@ export default function OrderBlotterPage() {
     filterOrders,
   } = useOrderFilters();
 
+  // Fetch orders from API
+  const { data: blotterData, isLoading, error } = useBlotter();
+  const orders = blotterData?.orders || [];
+
+  // Mutations
+  const approveMutation = useApproveOrder();
+  const cancelMutation = useCancelOrder();
+  const sendToEMSMutation = useSendToEMS();
+
   // Apply filters
   const filteredOrders = useMemo(() => {
     return filterOrders(orders);
-  }, [filterOrders]);
+  }, [filterOrders, orders]);
 
   const toggleSelectOrder = (orderId: string) => {
     const newSelected = new Set(selectedOrders);
@@ -81,6 +90,27 @@ export default function OrderBlotterPage() {
     const order = orders.find((o) => o.orderId === id);
     return !["FILLED", "SETTLED", "CANCELLED", "REJECTED"].includes(order?.state || "");
   });
+
+  const handleBulkApprove = async () => {
+    for (const orderId of Array.from(selectedOrders)) {
+      await approveMutation.mutateAsync({ orderId, approvedBy: "current-user" });
+    }
+    setSelectedOrders(new Set());
+  };
+
+  const handleBulkCancel = async () => {
+    for (const orderId of Array.from(selectedOrders)) {
+      await cancelMutation.mutateAsync({ orderId, cancelledBy: "current-user" });
+    }
+    setSelectedOrders(new Set());
+  };
+
+  const handleBulkSendToEMS = async () => {
+    for (const orderId of Array.from(selectedOrders)) {
+      await sendToEMSMutation.mutateAsync({ orderId, sentBy: "current-user" });
+    }
+    setSelectedOrders(new Set());
+  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-6rem)]">
@@ -161,18 +191,34 @@ export default function OrderBlotterPage() {
               Clear
             </Button>
             {canApprove && (
-              <Button size="sm" variant="outline" className="text-green-600">
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-green-600"
+                onClick={handleBulkApprove}
+                disabled={approveMutation.isPending}
+              >
                 <Check className="mr-1 h-3 w-3" />
                 Approve
               </Button>
             )}
             {canCancel && (
-              <Button size="sm" variant="outline" className="text-red-600">
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-red-600"
+                onClick={handleBulkCancel}
+                disabled={cancelMutation.isPending}
+              >
                 <X className="mr-1 h-3 w-3" />
                 Cancel
               </Button>
             )}
-            <Button size="sm">
+            <Button
+              size="sm"
+              onClick={handleBulkSendToEMS}
+              disabled={sendToEMSMutation.isPending}
+            >
               <Send className="mr-1 h-3 w-3" />
               Send to EMS
             </Button>
@@ -182,14 +228,24 @@ export default function OrderBlotterPage() {
 
       {/* Orders Table */}
       <div className="flex-1 min-h-0 overflow-hidden rounded-lg border bg-card">
-        <OrdersTable
-          orders={filteredOrders}
-          groupBy={groupBy}
-          selectedOrders={selectedOrders}
-          onSelectOrder={toggleSelectOrder}
-          onSelectAll={handleSelectAll}
-          className="h-full"
-        />
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-muted-foreground">Loading orders...</p>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-red-600">Error loading orders: {error.message}</p>
+          </div>
+        ) : (
+          <OrdersTable
+            orders={filteredOrders}
+            groupBy={groupBy}
+            selectedOrders={selectedOrders}
+            onSelectOrder={toggleSelectOrder}
+            onSelectAll={handleSelectAll}
+            className="h-full"
+          />
+        )}
       </div>
     </div>
   );

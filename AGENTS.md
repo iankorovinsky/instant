@@ -12,6 +12,7 @@
 ## Build, Test, and Development Commands
 - `make dev`: Runs the infra TUI (installs `infra/tui` deps first).
 - `make migrate`: Run database migrations.
+- `make data`: Ingest market data (securities).
 - `cd client && bun install`: Install frontend deps.
 - `cd client && bun run dev`: Start Next.js with env from `../.env`.
 - `cd client && bun run lint`: Run ESLint checks.
