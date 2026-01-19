@@ -4,6 +4,7 @@ import (
 	"instant/services/api/config"
 	"instant/services/api/eventbus"
 	"instant/services/api/eventstore"
+	"instant/services/api/ems"
 	"instant/services/api/handlers"
 	"instant/services/api/oms"
 	"instant/services/api/projections"
@@ -50,6 +51,25 @@ func main() {
 	defer omsQueryHandler.Close()
 	log.Println("OMS Handlers initialized successfully")
 
+	// Initialize EMS Service
+	log.Println("Initializing EMS Service...")
+	emsService, err := ems.NewService(cfg.DirectURL, eventStore, eventBus)
+	if err != nil {
+		log.Fatalf("Failed to initialize EMS Service: %v", err)
+	}
+	defer emsService.Close()
+	log.Println("EMS Service initialized successfully")
+
+	// Initialize EMS Handlers
+	log.Println("Initializing EMS Handlers...")
+	emsCommandHandler := handlers.NewEMSCommandHandler(emsService)
+	emsQueryHandler, err := handlers.NewEMSQueryHandler(cfg.DirectURL)
+	if err != nil {
+		log.Fatalf("Failed to initialize EMS Query Handler: %v", err)
+	}
+	defer emsQueryHandler.Close()
+	log.Println("EMS Handlers initialized successfully")
+
 	// Initialize OMS Projection Worker
 	log.Println("Initializing OMS Projection Worker...")
 	omsProjection, err := projections.NewOMSProjection(cfg.DirectURL, eventBus)
@@ -62,6 +82,21 @@ func main() {
 	go omsProjection.Start()
 	log.Println("OMS Projection Worker started")
 
+	// Initialize EMS Projection Worker
+	log.Println("Initializing EMS Projection Worker...")
+	emsProjection, err := projections.NewEMSProjection(cfg.DirectURL, eventBus)
+	if err != nil {
+		log.Fatalf("Failed to initialize EMS Projection: %v", err)
+	}
+	defer emsProjection.Close()
+
+	go emsProjection.Start()
+	log.Println("EMS Projection Worker started")
+
+	// Start EMS simulation listener
+	go emsService.Start()
+	log.Println("EMS Service listener started")
+
 	// Initialize Gin router
 	router := gin.Default()
 
@@ -69,7 +104,7 @@ func main() {
 	router.Use(corsMiddleware())
 
 	// Setup routes
-	routes.SetupRoutes(router, omsCommandHandler, omsQueryHandler, eventStore)
+	routes.SetupRoutes(router, omsCommandHandler, omsQueryHandler, emsCommandHandler, emsQueryHandler, eventStore)
 
 	// Graceful shutdown handling
 	quit := make(chan os.Signal, 1)
@@ -89,6 +124,8 @@ func main() {
 
 	// Stop projection worker
 	omsProjection.Stop()
+	emsProjection.Stop()
+	emsService.Stop()
 
 	log.Println("Server stopped gracefully")
 }

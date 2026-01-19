@@ -12,6 +12,8 @@ func SetupRoutes(
 	router *gin.Engine,
 	omsCommandHandler *handlers.OMSCommandHandler,
 	omsQueryHandler *handlers.OMSQueryHandler,
+	emsCommandHandler *handlers.EMSCommandHandler,
+	emsQueryHandler *handlers.EMSQueryHandler,
 	eventStore *eventstore.EventStore,
 ) {
 	// Health check
@@ -31,6 +33,11 @@ func SetupRoutes(
 			oms.POST("/orders/:id/send-to-ems", omsCommandHandler.HandleSendToEMS)
 		}
 
+		ems := api.Group("/ems")
+		{
+			ems.POST("/executions/request", emsCommandHandler.HandleRequestExecution)
+		}
+
 		// Generic command endpoint (for event-driven architecture)
 		api.POST("/commands", omsCommandHandler.HandleCommandRouter)
 	}
@@ -42,6 +49,8 @@ func SetupRoutes(
 		views.GET("/blotter", omsQueryHandler.GetBlotter)
 		views.GET("/orders/:id", omsQueryHandler.GetOrderByID)
 		views.GET("/orders/batch/:batchId", omsQueryHandler.GetOrdersByBatchID)
+		views.GET("/executions", emsQueryHandler.GetExecutions)
+		views.GET("/executions/:id", emsQueryHandler.GetExecutionByID)
 
 		// Other views (to be implemented)
 		views.GET("/market-grid", getMarketGrid)

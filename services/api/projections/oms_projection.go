@@ -85,6 +85,8 @@ func (p *OMSProjection) handleEvent(event *events.Event) error {
 		return p.handleOrderPartiallyFilled(event)
 	case events.EventOrderFullyFilled:
 		return p.handleOrderFullyFilled(event)
+	case events.EventSettlementBooked:
+		return p.handleSettlementBooked(event)
 	case events.EventOrderCancelled:
 		return p.handleOrderCancelled(event)
 	case events.EventRuleEvaluated:
@@ -272,6 +274,24 @@ func (p *OMSProjection) handleOrderFullyFilled(event *events.Event) error {
 	query := `
 		UPDATE orders
 		SET state = 'FILLED', "lastStateChangeAt" = $1, "updatedAt" = $2, "fullyFilledAt" = $3
+		WHERE "orderId" = $4
+	`
+
+	_, err := p.db.Exec(query, event.OccurredAt, event.OccurredAt, event.OccurredAt, orderID)
+	return err
+}
+
+// handleSettlementBooked updates order state to SETTLED
+func (p *OMSProjection) handleSettlementBooked(event *events.Event) error {
+	payload := event.Payload
+	orderID, ok := payload["orderId"].(string)
+	if !ok {
+		return nil
+	}
+
+	query := `
+		UPDATE orders
+		SET state = 'SETTLED', "lastStateChangeAt" = $1, "updatedAt" = $2, "settledAt" = $3
 		WHERE "orderId" = $4
 	`
 
