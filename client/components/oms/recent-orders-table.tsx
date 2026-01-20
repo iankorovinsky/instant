@@ -11,9 +11,9 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ScrollableTable } from "@/components/ui/scrollable-table";
-import { getStateColor } from "@/lib/oms/mock-data";
-import { formatDate } from "@/lib/pms/mock-data";
-import type { Order } from "@/lib/oms/types";
+import { getStateColor } from "@/lib/oms/ui";
+import { formatDate } from "@/lib/pms/ui";
+import type { Order } from "@/lib/api/oms";
 
 interface RecentOrdersTableProps {
   orders: Order[];
@@ -55,7 +55,9 @@ export function RecentOrdersTable({
               className="cursor-pointer hover:bg-muted/50"
               onClick={() => router.push(`/app/oms/orders/${order.orderId}`)}
             >
-              <TableCell className="font-mono text-sm">{order.cusip}</TableCell>
+              <TableCell className="font-mono text-sm">
+                {order.cusip || order.instrumentId}
+              </TableCell>
               <TableCell>
                 <Badge
                   variant="outline"

@@ -29,8 +29,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { households } from "@/lib/pms/mock-data";
-import type { OrderState, ComplianceStatus, OrderType } from "@/lib/oms/types";
+import type { OrderState, OrderType } from "@/lib/api/oms";
 import type { OrderFilters as FiltersState } from "./use-order-filters";
 
 interface StateOption {
@@ -133,7 +132,7 @@ const SIDE_OPTIONS: SideOption[] = [
 ];
 
 interface ComplianceOption {
-  value: ComplianceStatus;
+  value: "PASS" | "WARN" | "BLOCK";
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   color: string;
@@ -177,17 +176,19 @@ const ORDER_TYPE_OPTIONS: OrderTypeOption[] = [
 ];
 
 interface OrderFiltersProps {
+  households: Array<{ householdId: string; name: string }>;
   filters: FiltersState;
   activeFilterCount: number;
   onToggleState: (state: OrderState) => void;
   onToggleSide: (side: "BUY" | "SELL") => void;
   onToggleOrderType: (type: OrderType) => void;
   onToggleHousehold: (householdId: string) => void;
-  onToggleCompliance: (status: ComplianceStatus) => void;
+  onToggleCompliance: (status: "PASS" | "WARN" | "BLOCK") => void;
   onClearAll: () => void;
 }
 
 export function OrderFilters({
+  households,
   filters,
   activeFilterCount,
   onToggleState,

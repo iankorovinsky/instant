@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, TrendingUp, Briefcase, Building2, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,15 +14,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import {
-  accounts,
-  households,
-  portfolioModels,
-  getAccountPositions,
-  getAccountAnalytics,
-  formatCurrency,
-  formatDate,
-} from "@/lib/pms/mock-data";
+import { formatCurrency, formatDate } from "@/lib/pms/ui";
+import type { Position } from "@/lib/pms/types";
+import { getAccountView, getHouseholdView } from "@/lib/api/pms";
 
 export default function AccountDetailPage({
   params,
@@ -30,16 +24,35 @@ export default function AccountDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const [accountView, setAccountView] = useState<any | null>(null);
+  const [household, setHousehold] = useState<any | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const account = accounts.find((a) => a.accountId === id);
-  const household = account ? households.find((h) => h.householdId === account.householdId) : null;
-  const model = account?.modelId
-    ? portfolioModels.find((m) => m.modelId === account.modelId)
-    : null;
-  const positions = getAccountPositions(id);
-  const analytics = getAccountAnalytics(id);
+  useEffect(() => {
+    const loadAccount = async () => {
+      setIsLoading(true);
+      try {
+        const view = await getAccountView(id);
+        setAccountView(view);
+        if (view?.account?.householdId) {
+          const householdView = await getHouseholdView(view.account.householdId);
+          setHousehold(householdView.household);
+        }
+      } catch (err) {
+        console.error("Failed to load account view", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadAccount();
+  }, [id]);
 
-  if (!account) {
+  const account = accountView?.account;
+  const positions: Position[] = accountView?.positions || [];
+  const analytics = accountView?.analytics;
+  const modelId = account?.modelId;
+
+  if (!account && !isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-96">
         <p className="text-muted-foreground">Account not found</p>
@@ -66,12 +79,12 @@ export default function AccountDetailPage({
                 <Briefcase className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold tracking-tight">{account.name}</h1>
+                <h1 className="text-2xl font-bold tracking-tight">{account?.name}</h1>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Badge variant="secondary" className="capitalize">
-                    {account.accountType}
+                    {account?.accountType}
                   </Badge>
-                  <span>Created {formatDate(account.createdAt)}</span>
+                  {account?.createdAt && <span>Created {formatDate(new Date(account.createdAt))}</span>}
                 </div>
               </div>
             </div>
@@ -105,19 +118,14 @@ export default function AccountDetailPage({
             <CardTitle className="text-base">Assigned Model</CardTitle>
           </CardHeader>
           <CardContent>
-            {model ? (
-              <Link
-                href={`/app/pms/models/${model.modelId}`}
-                className="flex items-center gap-3 hover:text-primary"
-              >
-                <LayoutGrid className="h-5 w-5 text-muted-foreground" />
+            {modelId ? (
+              <div className="flex items-center gap-3 text-muted-foreground">
+                <LayoutGrid className="h-5 w-5" />
                 <div>
-                  <span className="font-medium">{model.name}</span>
-                  <p className="text-xs text-muted-foreground">
-                    Target: {model.durationTarget}y duration
-                  </p>
+                  <span className="font-medium text-foreground">Model {modelId}</span>
+                  <p className="text-xs text-muted-foreground">Model details are not available yet</p>
                 </div>
-              </Link>
+              </div>
             ) : (
               <div className="flex items-center gap-3 text-muted-foreground">
                 <LayoutGrid className="h-5 w-5" />
@@ -135,10 +143,16 @@ export default function AccountDetailPage({
             <CardTitle className="text-sm font-medium">Total Market Value</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(analytics.totalMarketValue)}</div>
-            <p className="text-xs text-muted-foreground">
-              Cash: {formatCurrency(analytics.cashBalance)} ({analytics.cashPercentage}%)
-            </p>
+            {analytics ? (
+              <>
+                <div className="text-2xl font-bold">{formatCurrency(analytics.totalMarketValue)}</div>
+                <p className="text-xs text-muted-foreground">
+                  Cash: {formatCurrency(analytics.cashBalance)} ({analytics.cashPercentage}%)
+                </p>
+              </>
+            ) : (
+              <div className="text-sm text-muted-foreground">Loading...</div>
+            )}
           </CardContent>
         </Card>
 
@@ -147,12 +161,10 @@ export default function AccountDetailPage({
             <CardTitle className="text-sm font-medium">Portfolio Duration</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{analytics.totalDuration.toFixed(2)} years</div>
-            {model && (
-              <p className="text-xs text-muted-foreground">
-                Target: {model.durationTarget}y
-              </p>
-            )}
+            <div className="text-2xl font-bold">
+              {analytics ? `${analytics.totalDuration.toFixed(2)} years` : "--"}
+            </div>
+            <p className="text-xs text-muted-foreground">Weighted average</p>
           </CardContent>
         </Card>
 
@@ -161,7 +173,9 @@ export default function AccountDetailPage({
             <CardTitle className="text-sm font-medium">Total DV01</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(analytics.totalDv01)}</div>
+            <div className="text-2xl font-bold">
+              {analytics ? formatCurrency(analytics.totalDv01) : "--"}
+            </div>
             <p className="text-xs text-muted-foreground">Dollar value of 1bp</p>
           </CardContent>
         </Card>
@@ -183,21 +197,17 @@ export default function AccountDetailPage({
           <CardTitle>Maturity Bucket Allocation</CardTitle>
           <CardDescription>
             Distribution of portfolio across maturity buckets
-            {model && " vs. model targets"}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex gap-2">
-            {Object.entries(analytics.bucketWeights).map(([bucket, weight]) => {
-              const targetWeight = model?.bucketWeights[bucket as keyof typeof model.bucketWeights];
+            {analytics &&
+              (Object.entries(analytics.bucketWeights) as [string, number][]).map(([bucket, weight]) => {
               return (
                 <div key={bucket} className="flex-1">
                   <div className="text-center mb-2">
                     <div className="text-sm font-medium">{bucket}</div>
                     <div className="text-2xl font-bold">{weight}%</div>
-                    {model && targetWeight !== undefined && (
-                      <div className="text-xs text-muted-foreground">Target: {targetWeight}%</div>
-                    )}
                   </div>
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
                     <div

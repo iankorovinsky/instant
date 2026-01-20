@@ -1,8 +1,7 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   FileText,
@@ -26,15 +25,14 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { formatDate, formatCurrency } from "@/lib/pms/ui";
 import {
-  proposals,
-  accounts,
-  households,
-  portfolioTargets,
-  portfolioModels,
-  formatDate,
-  formatCurrency,
-} from "@/lib/pms/mock-data";
+  approveProposal,
+  getAccountView,
+  getHouseholdView,
+  getProposal,
+  sendProposalToOms,
+} from "@/lib/api/pms";
 import type { ProposalTrade } from "@/lib/pms/types";
 
 const statusColors: Record<string, string> = {
@@ -51,25 +49,37 @@ export default function ProposalDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const router = useRouter();
+  const [proposal, setProposal] = useState<any | null>(null);
+  const [account, setAccount] = useState<any | null>(null);
+  const [household, setHousehold] = useState<any | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
 
-  const proposal = proposals.find((p) => p.proposalId === id);
-  const account = proposal?.accountId
-    ? accounts.find((a) => a.accountId === proposal.accountId)
-    : null;
-  const household = proposal?.householdId
-    ? households.find((h) => h.householdId === proposal.householdId)
-    : account
-    ? households.find((h) => h.householdId === account.householdId)
-    : null;
-  const target = proposal?.targetId
-    ? portfolioTargets.find((t) => t.targetId === proposal.targetId)
-    : null;
-  const model = target?.modelId
-    ? portfolioModels.find((m) => m.modelId === target.modelId)
-    : null;
+  useEffect(() => {
+    const loadProposal = async () => {
+      setIsLoading(true);
+      try {
+        const proposalResponse = await getProposal(id);
+        setProposal(proposalResponse);
+        if (proposalResponse.accountId) {
+          const accountView = await getAccountView(proposalResponse.accountId);
+          setAccount(accountView.account);
+        }
+        if (proposalResponse.householdId) {
+          const householdView = await getHouseholdView(proposalResponse.householdId);
+          setHousehold(householdView.household);
+        }
+      } catch (err) {
+        console.error("Failed to load proposal", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadProposal();
+  }, [id]);
 
-  if (!proposal) {
+  if (!proposal && !isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-96">
         <p className="text-muted-foreground">Proposal not found</p>
@@ -80,15 +90,54 @@ export default function ProposalDetailPage({
     );
   }
 
-  const buyTrades = proposal.trades.filter((t: ProposalTrade) => t.side === "BUY");
-  const sellTrades = proposal.trades.filter((t: ProposalTrade) => t.side === "SELL");
+  if (!proposal) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96">
+        <p className="text-muted-foreground">Loading proposal...</p>
+      </div>
+    );
+  }
+
+  const trades = Array.isArray(proposal?.trades) ? proposal.trades : [];
+  const buyTrades = trades.filter((t: ProposalTrade) => t.side === "BUY");
+  const sellTrades = trades.filter((t: ProposalTrade) => t.side === "SELL");
   const totalBuyValue = buyTrades.reduce((sum: number, t: ProposalTrade) => sum + t.estimatedValue, 0);
   const totalSellValue = sellTrades.reduce((sum: number, t: ProposalTrade) => sum + t.estimatedValue, 0);
 
-  const durationChange =
-    proposal.predictedAnalytics.totalDuration - proposal.currentAnalytics.totalDuration;
-  const dv01Change =
-    proposal.predictedAnalytics.totalDv01 - proposal.currentAnalytics.totalDv01;
+  const durationChange = proposal
+    ? proposal.predictedAnalytics.totalDuration - proposal.currentAnalytics.totalDuration
+    : 0;
+  const dv01Change = proposal
+    ? proposal.predictedAnalytics.totalDv01 - proposal.currentAnalytics.totalDv01
+    : 0;
+
+  const handleApprove = async () => {
+    if (!proposal) return;
+    setIsApproving(true);
+    try {
+      await approveProposal(proposal.proposalId, "advisor@instant.com");
+      const refreshed = await getProposal(proposal.proposalId);
+      setProposal(refreshed);
+    } catch (err) {
+      console.error("Failed to approve proposal", err);
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  const handleSendToOms = async () => {
+    if (!proposal) return;
+    setIsSending(true);
+    try {
+      await sendProposalToOms(proposal.proposalId, "advisor@instant.com");
+      const refreshed = await getProposal(proposal.proposalId);
+      setProposal(refreshed);
+    } catch (err) {
+      console.error("Failed to send proposal to OMS", err);
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -108,39 +157,41 @@ export default function ProposalDetailPage({
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-2xl font-bold tracking-tight font-mono">
-                    {proposal.proposalId}
+                    {proposal?.proposalId}
                   </h1>
-                  <Badge className={statusColors[proposal.status]}>
-                    {proposal.status.replace(/_/g, " ")}
-                  </Badge>
+                  {proposal?.status && (
+                    <Badge className={statusColors[proposal.status] || "bg-gray-100 text-gray-800"}>
+                      {proposal.status.replace(/_/g, " ")}
+                    </Badge>
+                  )}
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  As of {formatDate(proposal.asOfDate)}
+                  {proposal?.asOfDate && `As of ${formatDate(new Date(proposal.asOfDate))}`}
                 </p>
               </div>
             </div>
           </div>
         </div>
-        {proposal.status === "DRAFT" && (
+        {proposal?.status === "DRAFT" && (
           <div className="flex gap-2">
             <Button variant="outline" className="text-destructive">
               <X className="mr-2 h-4 w-4" />
               Reject
             </Button>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleApprove} disabled={isApproving}>
               <Check className="mr-2 h-4 w-4" />
-              Approve
+              {isApproving ? "Approving..." : "Approve"}
             </Button>
-            <Button>
+            <Button onClick={handleSendToOms} disabled={isSending}>
               <Send className="mr-2 h-4 w-4" />
-              Send to OMS
+              {isSending ? "Sending..." : "Send to OMS"}
             </Button>
           </div>
         )}
-        {proposal.status === "APPROVED" && (
-          <Button>
+        {proposal?.status === "APPROVED" && (
+          <Button onClick={handleSendToOms} disabled={isSending}>
             <Send className="mr-2 h-4 w-4" />
-            Send to OMS
+            {isSending ? "Sending..." : "Send to OMS"}
           </Button>
         )}
       </div>
@@ -152,7 +203,7 @@ export default function ProposalDetailPage({
             <CardTitle className="text-base">Scope</CardTitle>
           </CardHeader>
           <CardContent>
-            {proposal.householdId ? (
+            {proposal?.householdId ? (
               <Link
                 href={`/app/pms/households/${household?.householdId}`}
                 className="flex items-center gap-3 hover:text-primary"
@@ -183,18 +234,9 @@ export default function ProposalDetailPage({
             <CardTitle className="text-base">Target Configuration</CardTitle>
           </CardHeader>
           <CardContent>
-            {target ? (
-              <div>
-                <p className="font-medium">
-                  {model?.name || `Duration Target: ${target.durationTarget}y`}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Target Duration: {target.durationTarget} years
-                </p>
-              </div>
-            ) : (
-              <p className="text-muted-foreground">No target specified</p>
-            )}
+            <p className="text-muted-foreground">
+              {proposal?.targetId ? `Target ID: ${proposal.targetId}` : "No target specified"}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -231,8 +273,8 @@ export default function ProposalDetailPage({
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Cash</span>
                   <span className="font-medium">
-                    {formatCurrency(proposal.currentAnalytics.cashBalance)} (
-                    {proposal.currentAnalytics.cashPercentage}%)
+                  {formatCurrency(proposal.currentAnalytics.cashBalance)} (
+                  {proposal.currentAnalytics.cashPercentage}%)
                   </span>
                 </div>
               </div>
@@ -274,8 +316,8 @@ export default function ProposalDetailPage({
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Cash</span>
                   <span className="font-medium">
-                    {formatCurrency(proposal.predictedAnalytics.cashBalance)} (
-                    {proposal.predictedAnalytics.cashPercentage}%)
+                  {formatCurrency(proposal.predictedAnalytics.cashBalance)} (
+                  {proposal.predictedAnalytics.cashPercentage}%)
                   </span>
                 </div>
               </div>
@@ -299,8 +341,6 @@ export default function ProposalDetailPage({
                   bucket as keyof typeof proposal.predictedAnalytics.bucketWeights
                 ] as number;
               const change = predicted - current;
-              const targetWeight = target?.bucketWeights[bucket as keyof typeof target.bucketWeights] as number | undefined;
-
               return (
                 <div key={bucket} className="flex-1">
                   <div className="text-center mb-2">
@@ -314,9 +354,6 @@ export default function ProposalDetailPage({
                       {change > 0 ? "+" : ""}
                       {change}%
                     </div>
-                    {targetWeight !== undefined && (
-                      <div className="text-xs text-muted-foreground">Target: {targetWeight}%</div>
-                    )}
                   </div>
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
                     <div
@@ -372,7 +409,7 @@ export default function ProposalDetailPage({
         <CardHeader>
           <CardTitle>Proposed Trades</CardTitle>
           <CardDescription>
-            {proposal.trades.length} trade{proposal.trades.length !== 1 ? "s" : ""} in this proposal
+            {trades.length} trade{trades.length !== 1 ? "s" : ""} in this proposal
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -388,7 +425,7 @@ export default function ProposalDetailPage({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {proposal.trades.map((trade: ProposalTrade, index: number) => (
+            {trades.map((trade: ProposalTrade, index: number) => (
                 <TableRow key={`${trade.instrumentId}-${index}`}>
                   <TableCell>
                     <Badge
@@ -426,7 +463,7 @@ export default function ProposalDetailPage({
               <div>
                 <p className="font-medium">Created</p>
                 <p className="text-sm text-muted-foreground">
-                  {formatDate(proposal.createdAt)} by {proposal.createdBy}
+                  {formatDate(new Date(proposal.createdAt))} by {proposal.createdBy}
                 </p>
               </div>
             </div>
@@ -439,7 +476,7 @@ export default function ProposalDetailPage({
                 <div>
                   <p className="font-medium">Approved</p>
                   <p className="text-sm text-muted-foreground">
-                    {formatDate(proposal.approvedAt)} by {proposal.approvedBy}
+                    {formatDate(new Date(proposal.approvedAt))} by {proposal.approvedBy}
                   </p>
                 </div>
               </div>
@@ -452,7 +489,9 @@ export default function ProposalDetailPage({
                 </div>
                 <div>
                   <p className="font-medium">Sent to OMS</p>
-                  <p className="text-sm text-muted-foreground">{formatDate(proposal.sentToOmsAt)}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {formatDate(new Date(proposal.sentToOmsAt))}
+                  </p>
                 </div>
               </div>
             )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -10,7 +10,6 @@ import {
   Briefcase,
   Settings2,
   Play,
-  LayoutGrid,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,14 +27,14 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { formatCurrency } from "@/lib/pms/ui";
 import {
-  households,
-  accounts,
-  portfolioModels,
-  getAccountAnalytics,
-  getHouseholdAnalytics,
-  formatCurrency,
-} from "@/lib/pms/mock-data";
+  getAccountView,
+  getAccounts,
+  getHouseholdView,
+  getHouseholds,
+  runOptimization,
+} from "@/lib/api/pms";
 import { BucketWeights } from "@/lib/pms/types";
 
 type OptimizationScope = "account" | "household";
@@ -45,7 +44,6 @@ export default function OptimizationPage() {
   const [scope, setScope] = useState<OptimizationScope>("account");
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
   const [selectedHouseholdId, setSelectedHouseholdId] = useState<string>("");
-  const [selectedModelId, setSelectedModelId] = useState<string>("");
   const [durationTarget, setDurationTarget] = useState<number>(5);
   const [useCustomWeights, setUseCustomWeights] = useState(false);
   const [bucketWeights, setBucketWeights] = useState<BucketWeights>({
@@ -59,32 +57,59 @@ export default function OptimizationPage() {
   const [maxTurnover, setMaxTurnover] = useState<number>(20);
   const [assumptions, setAssumptions] = useState<string>("");
   const [isRunning, setIsRunning] = useState(false);
+  const [accounts, setAccounts] = useState<Array<{ accountId: string; name: string; householdId?: string }>>([]);
+  const [households, setHouseholds] = useState<Array<{ householdId: string; name: string }>>([]);
+  const [currentAnalytics, setCurrentAnalytics] = useState<any | null>(null);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
 
   const selectedAccount = accounts.find((a) => a.accountId === selectedAccountId);
   const selectedHousehold = households.find((h) => h.householdId === selectedHouseholdId);
-  const selectedModel = portfolioModels.find((m) => m.modelId === selectedModelId);
 
-  const currentAnalytics =
-    scope === "account" && selectedAccountId
-      ? getAccountAnalytics(selectedAccountId)
-      : scope === "household" && selectedHouseholdId
-      ? getHouseholdAnalytics(selectedHouseholdId)
-      : null;
+  useEffect(() => {
+    const loadLists = async () => {
+      try {
+        const [accountsResponse, householdsResponse] = await Promise.all([
+          getAccounts(),
+          getHouseholds(),
+        ]);
+        setAccounts(accountsResponse.accounts);
+        setHouseholds(householdsResponse.households);
+      } catch (err) {
+        console.error("Failed to load PMS lists", err);
+      }
+    };
+    loadLists();
+  }, []);
 
-  const handleModelSelect = (modelId: string) => {
-    setSelectedModelId(modelId);
-    const model = portfolioModels.find((m) => m.modelId === modelId);
-    if (model) {
-      setDurationTarget(model.durationTarget);
-      setBucketWeights({ ...model.bucketWeights });
-      if (model.constraints?.maxPositionSize) {
-        setMaxPositionSize(model.constraints.maxPositionSize);
+  useEffect(() => {
+    const loadAnalytics = async () => {
+      setCurrentAnalytics(null);
+      if (scope === "account" && selectedAccountId) {
+        setIsLoadingAnalytics(true);
+        try {
+          const view = await getAccountView(selectedAccountId);
+          setCurrentAnalytics(view.analytics);
+        } catch (err) {
+          console.error("Failed to load account analytics", err);
+        } finally {
+          setIsLoadingAnalytics(false);
+        }
       }
-      if (model.constraints?.maxTurnover) {
-        setMaxTurnover(model.constraints.maxTurnover);
+      if (scope === "household" && selectedHouseholdId) {
+        setIsLoadingAnalytics(true);
+        try {
+          const view = await getHouseholdView(selectedHouseholdId);
+          setCurrentAnalytics(view.analytics);
+        } catch (err) {
+          console.error("Failed to load household analytics", err);
+        } finally {
+          setIsLoadingAnalytics(false);
+        }
       }
-    }
-  };
+    };
+    loadAnalytics();
+  }, [scope, selectedAccountId, selectedHouseholdId]);
+
 
   const handleBucketWeightChange = (bucket: keyof BucketWeights, value: number) => {
     const newWeights = { ...bucketWeights, [bucket]: value };
@@ -105,14 +130,28 @@ export default function OptimizationPage() {
 
   const totalWeight = Object.values(bucketWeights).reduce((sum, w) => sum + w, 0);
 
-  const handleRunOptimization = () => {
+  const handleRunOptimization = async () => {
+    if (!isValid) return;
     setIsRunning(true);
-    // Simulate optimization delay
-    setTimeout(() => {
+    try {
+      const response = await runOptimization({
+        scope,
+        scopeId: scope === "account" ? selectedAccountId : selectedHouseholdId,
+        durationTarget,
+        bucketWeights,
+        constraints: {
+          maxPositionSize,
+          maxTurnover,
+        },
+        assumptions,
+        requestedBy: "advisor@instant.com",
+      });
+      router.push(`/app/pms/proposals/${response.proposalId}`);
+    } catch (err) {
+      console.error("Optimization failed", err);
+    } finally {
       setIsRunning(false);
-      // In a real app, this would navigate to the generated proposal
-      router.push("/app/pms/proposals");
-    }, 2000);
+    }
   };
 
   const isValid =
@@ -248,34 +287,10 @@ export default function OptimizationPage() {
             <CardHeader>
               <CardTitle>Target Configuration</CardTitle>
               <CardDescription>
-                Use a portfolio model or configure custom targets
+                Configure optimization targets
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label>Portfolio Model (Optional)</Label>
-                <Select value={selectedModelId} onValueChange={handleModelSelect}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a model or configure manually..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {portfolioModels.map((model) => (
-                      <SelectItem key={model.modelId} value={model.modelId}>
-                        <div className="flex items-center gap-2">
-                          <LayoutGrid className="h-4 w-4" />
-                          <span>{model.name}</span>
-                          <span className="text-muted-foreground">
-                            ({model.durationTarget}y duration)
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Separator />
-
               <div className="space-y-4">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -300,7 +315,7 @@ export default function OptimizationPage() {
                   <Label htmlFor="customWeights">Customize bucket weights</Label>
                 </div>
 
-                {(useCustomWeights || selectedModelId) && (
+                {useCustomWeights && (
                   <div className="space-y-4 pl-6">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm">Target Bucket Weights</Label>
@@ -448,6 +463,10 @@ export default function OptimizationPage() {
                     </span>
                   </div>
                 </div>
+              ) : isLoadingAnalytics ? (
+                <p className="text-muted-foreground text-center py-8">
+                  Loading current metrics...
+                </p>
               ) : (
                 <p className="text-muted-foreground text-center py-8">
                   Select a {scope} to view current metrics
@@ -463,7 +482,7 @@ export default function OptimizationPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {Object.entries(currentAnalytics.bucketWeights).map(([bucket, weight]) => {
+                  {(Object.entries(currentAnalytics.bucketWeights) as [string, number][]).map(([bucket, weight]) => {
                     const target = bucketWeights[bucket as keyof BucketWeights];
                     const diff = weight - target;
                     return (
@@ -472,7 +491,7 @@ export default function OptimizationPage() {
                           <span className="text-sm">{bucket}</span>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">{weight}%</span>
-                            {useCustomWeights || selectedModelId ? (
+                            {useCustomWeights ? (
                               <span
                                 className={`text-xs ${
                                   Math.abs(diff) > 5
@@ -502,22 +521,6 @@ export default function OptimizationPage() {
             </Card>
           )}
 
-          {selectedModel && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Using Model</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-3">
-                  <LayoutGrid className="h-5 w-5 text-primary" />
-                  <div>
-                    <p className="font-medium">{selectedModel.name}</p>
-                    <p className="text-xs text-muted-foreground">{selectedModel.description}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
       </div>
     </div>

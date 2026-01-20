@@ -52,6 +52,7 @@ model Order {
   // Relations
   account    Account    @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
   instrument Instrument @relation(fields: [instrumentId], references: [cusip], onDelete: Restrict)
+  executions Execution[]
 
   @@map("orders")
   @@index([accountId])

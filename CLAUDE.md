@@ -115,8 +115,8 @@ See [`QUICKSTART.md`](./QUICKSTART.md) for detailed setup and testing instructio
 **TL;DR:**
 ```bash
 make migrate           # Run database migrations
-make dev               # Start all services (or run manually)
-./test-integration.sh  # Test the OMS integration
+make dev               # Start all services (TUI dashboard)
+make test              # Run integration tests (auto-seeds test data)
 ```
 
 ## Implemented Systems

@@ -1,12 +1,14 @@
 package oms
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"instant/services/api/eventbus"
 	"instant/services/api/events"
 	"instant/services/api/eventstore"
+	"instant/services/api/services/compliance"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,14 +28,15 @@ var (
 type Service struct {
 	eventStore *eventstore.EventStore
 	eventBus   *eventbus.EventBus
-	// complianceService would be injected here in full implementation
+	complianceService *compliance.Service
 }
 
 // NewService creates a new OMS service
-func NewService(es *eventstore.EventStore, eb *eventbus.EventBus) *Service {
+func NewService(es *eventstore.EventStore, eb *eventbus.EventBus, complianceService *compliance.Service) *Service {
 	return &Service{
 		eventStore: es,
 		eventBus:   eb,
+		complianceService: complianceService,
 	}
 }
 
@@ -89,7 +92,7 @@ func (s *Service) CreateOrder(req CreateOrderRequest, correlationID string) (str
 	s.eventBus.Publish(event)
 
 	// Run compliance check (pre-trade)
-	complianceResult, err := s.runComplianceCheck(orderID, req.AccountID, correlationID, req.CreatedBy)
+	complianceResult, err := s.runComplianceCheck(orderID, req, correlationID, req.CreatedBy)
 	if err != nil {
 		// Log error but don't fail order creation
 		fmt.Printf("Compliance check failed: %v\n", err)
@@ -279,16 +282,24 @@ func (s *Service) validateCreateOrderRequest(req CreateOrderRequest) error {
 
 // runComplianceCheck runs pre-trade compliance checks
 // This is a stub - would integrate with actual compliance service
-func (s *Service) runComplianceCheck(orderID, accountID, correlationID, actorID string) (*ComplianceResult, error) {
-	// Stub implementation - always returns PASS
-	// In real implementation, this would call the compliance service
-	return &ComplianceResult{
-		Status:      ComplianceStatusPass,
-		RulesPassed: []string{"max_order_size", "max_duration"},
-		Warnings:    []ComplianceViolation{},
-		Blocks:      []ComplianceViolation{},
-		CheckedAt:   time.Now().UTC(),
-	}, nil
+func (s *Service) runComplianceCheck(orderID string, req CreateOrderRequest, correlationID, actorID string) (*ComplianceResult, error) {
+	if s.complianceService == nil {
+		return &ComplianceResult{
+			Status:      ComplianceStatusPass,
+			RulesPassed: []string{},
+			Warnings:    []ComplianceViolation{},
+			Blocks:      []ComplianceViolation{},
+			CheckedAt:   time.Now().UTC(),
+		}, nil
+	}
+
+	order := complianceOrderSnapshot(orderID, req)
+	result, err := s.complianceService.EvaluatePreTrade(order, actorID, correlationID)
+	if err != nil {
+		return nil, err
+	}
+
+	return complianceResultFromService(result), nil
 }
 
 // storeComplianceResult stores compliance result by emitting RuleEvaluated event
@@ -364,4 +375,68 @@ func (s *Service) emitApprovalRequestedEvent(orderID, correlationID, actorID str
 func (s *Service) needsApproval(req CreateOrderRequest) bool {
 	// For MVP, require approval for large orders
 	return req.Quantity > 1000000
+}
+
+func complianceOrderSnapshot(orderID string, req CreateOrderRequest) compliance.OrderSnapshot {
+	limitPrice := sql.NullFloat64{}
+	if req.LimitPrice != nil {
+		limitPrice = sql.NullFloat64{Float64: *req.LimitPrice, Valid: true}
+	}
+	curveSpread := sql.NullFloat64{}
+	if req.CurveSpreadBp != nil {
+		curveSpread = sql.NullFloat64{Float64: *req.CurveSpreadBp, Valid: true}
+	}
+
+	return compliance.OrderSnapshot{
+		OrderID:      orderID,
+		AccountID:    req.AccountID,
+		InstrumentID: req.InstrumentID,
+		Side:         string(req.Side),
+		Quantity:     req.Quantity,
+		OrderType:    string(req.OrderType),
+		LimitPrice:   limitPrice,
+		CurveSpread:  curveSpread,
+	}
+}
+
+func complianceResultFromService(result *compliance.Result) *ComplianceResult {
+	if result == nil {
+		return nil
+	}
+
+	warnings := []ComplianceViolation{}
+	for _, warning := range result.Warnings {
+		warnings = append(warnings, ComplianceViolation{
+			RuleID:      warning.RuleID,
+			RuleName:    warning.RuleName,
+			Description: warning.Description,
+			Metrics:     warning.Metrics,
+		})
+	}
+
+	blocks := []ComplianceViolation{}
+	for _, block := range result.Blocks {
+		blocks = append(blocks, ComplianceViolation{
+			RuleID:      block.RuleID,
+			RuleName:    block.RuleName,
+			Description: block.Description,
+			Metrics:     block.Metrics,
+		})
+	}
+
+	status := ComplianceStatusPass
+	switch result.Status {
+	case "WARN":
+		status = ComplianceStatusWarn
+	case "BLOCK":
+		status = ComplianceStatusBlock
+	}
+
+	return &ComplianceResult{
+		Status:      status,
+		RulesPassed: result.RulesPassed,
+		Warnings:    warnings,
+		Blocks:      blocks,
+		CheckedAt:   result.CheckedAt,
+	}
 }

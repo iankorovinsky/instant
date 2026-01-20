@@ -7,6 +7,7 @@
 ## 1. Overview
 
 The Market Data + Evaluated Pricing system enables advisors to:
+
 - Manage instrument master data (UST securities: bills, notes, bonds, TIPS)
 - Ingest and manage yield curve data (EOD par yields by tenor)
 - Compute evaluated prices and yields for instruments
@@ -25,9 +26,10 @@ The Market Data + Evaluated Pricing system enables advisors to:
 
 ### 2.1 Instrument Master Data (`/app/marketdata/instruments`)
 
-**Purpose**: Manage and view UST instrument master data.
+**Purpose**: View UST instrument master data (ingested via `data/` scripts).
 
 #### Instrument List View
+
 - **Table Columns**:
   - CUSIP (unique identifier, link to detail)
   - Name/Description
@@ -48,6 +50,7 @@ The Market Data + Evaluated Pricing system enables advisors to:
   - As-of Date Selector (global, affects all prices/yields)
 
 #### Instrument Detail View (`/app/marketdata/instruments/:cusip`)
+
 - **Instrument Information**:
   - CUSIP (unique identifier)
   - Name/Description
@@ -88,14 +91,9 @@ The Market Data + Evaluated Pricing system enables advisors to:
   - View positions (link to PMS account positions)
 
 #### Instrument Ingestion
-- **Bulk Import**: CSV/JSON file upload
-- **Single Import**: Manual entry form
-- **Validation**:
-  - CUSIP must be unique
-  - Maturity date must be after issue date
-  - Coupon rate must be >= 0
-  - Required fields validation
-- **Events**: `InstrumentIngested`, `InstrumentUpdated`
+
+- **Data ingestion**: Handled by scripts in `data/` directory (`ingest_security_data.py`)
+- **No UI ingestion needed**: Instruments are loaded directly into database via scripts
 
 ---
 
@@ -104,6 +102,7 @@ The Market Data + Evaluated Pricing system enables advisors to:
 **Purpose**: Manage yield curve data and view curve visualizations.
 
 #### Curve Viewer
+
 - **Yield Curve Chart**:
   - X-axis: Tenor (time to maturity)
   - Y-axis: Par Yield (percentage)
@@ -125,17 +124,12 @@ The Market Data + Evaluated Pricing system enables advisors to:
   - View curve history (multiple dates on same chart, optional)
 
 #### Curve Ingestion
-- **Bulk Import**: CSV/JSON file upload
-  - Expected format: `{tenor: string, parYield: number}[]`
-  - Tenors: standard formats (1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y, 7Y, 10Y, 20Y, 30Y)
-- **Validation**:
-  - As-of date must be valid
-  - Par yields must be positive numbers
-  - Duplicate tenors not allowed (per as-of date)
-  - Required curve points (minimum set of tenors)
-- **Events**: `MarketDataCurveIngested`
+
+- **Data ingestion**: Handled by scripts in `data/` directory (`ingest_yield_curves_fred.py`)
+- **No UI ingestion needed**: Yield curves are loaded directly into database via scripts
 
 #### Curve History (optional)
+
 - View multiple curves on same chart (compare curves across dates)
 - Curve evolution over time (animation, optional)
 - Curve point changes (diff view)
@@ -147,6 +141,7 @@ The Market Data + Evaluated Pricing system enables advisors to:
 **Purpose**: Comprehensive view of all instruments with evaluated pricing and risk metrics.
 
 #### Market Grid Table
+
 - **Columns**:
   - CUSIP (link to instrument detail)
   - Name/Description
@@ -176,12 +171,14 @@ The Market Data + Evaluated Pricing system enables advisors to:
   - Shows curve source metadata
 
 #### Grid Information Header
+
 - **Selected As-of Date**: Prominently displayed
 - **Curve Source**: Source metadata (file, URL, hash)
 - **Last Updated**: When curve was ingested
 - **Instrument Count**: Total instruments shown
 
 #### Actions
+
 - **Export**: Export grid to CSV (with current filters/sorting)
 - **View Instrument Detail**: Click CUSIP → navigate to instrument detail
 - **View Curve**: Link to curve viewer for selected as-of date
@@ -194,38 +191,42 @@ The Market Data + Evaluated Pricing system enables advisors to:
 **Purpose**: Compute evaluated prices, yields, and risk metrics for instruments.
 
 #### Pricing Inputs
+
 - **Yield Curve**: Par yields by tenor (from MarketDataDay)
-- **Instrument Cashflows**: 
+- **Instrument Cashflows**:
   - Coupon payments (dates and amounts)
   - Principal repayment (maturity date)
   - Day count convention
 - **As-of Date**: Market date for pricing
 
 #### Pricing Algorithm
+
 1. **Yield Curve Interpolation**:
+
    - Interpolate yield for instrument's maturity from curve points
    - Use linear interpolation or spline (deterministic method)
    - Handle edge cases (beyond curve range)
-
 2. **Cashflow Discounting**:
+
    - Generate all future cashflows (coupons + principal)
    - Discount each cashflow to present value using interpolated yield
    - Sum discounted cashflows
-
 3. **Price Calculation**:
+
    - **Clean Price**: Discounted cashflows / 100 (per $100 par)
    - **Dirty Price**: Clean price + accrued interest
    - **Accrued Interest**: Calculate based on day count convention and last coupon date
-
 4. **Yield Calculation**:
+
    - **Yield to Maturity**: Solve for YTM that equates dirty price to discounted cashflows
    - Iterative solver (Newton-Raphson or similar, deterministic)
-
 5. **Risk Metrics**:
+
    - **Modified Duration**: Weighted average time to cashflows, modified by (1 + yield)
    - **DV01**: Price sensitivity to 1bp yield change = Modified Duration × Price × 0.0001
 
 #### Pricing Outputs
+
 - **Clean Price** (decimal, per $100 par)
 - **Dirty Price** (decimal, per $100 par)
 - **Accrued Interest** (decimal)
@@ -234,15 +235,16 @@ The Market Data + Evaluated Pricing system enables advisors to:
 - **DV01** (decimal, dollars per $100 par)
 
 #### Determinism Requirements
+
 - Pricing must be deterministic (same inputs → same outputs)
 - Use fixed interpolation method
 - Use fixed solver parameters (tolerance, max iterations)
 - Store pricing model version
 
-#### Events
-- `PricingInputsResolved`: Pricing inputs determined (curve, instrument, as-of date)
-- `EvaluatedPriceComputed`: Evaluated price calculated
-- `RiskMetricsComputed`: Duration/DV01 calculated
+#### Pricing Computation
+
+- Pricing computed on-demand (no events needed)
+- Results can be cached by (instrumentId, asOfDate) for performance
 
 ---
 
@@ -251,6 +253,7 @@ The Market Data + Evaluated Pricing system enables advisors to:
 **Purpose**: Manage market date selection for time-travel pricing.
 
 #### As-of Date Selector (Global Component)
+
 - **Location**: Header/toolbar (available on all market data pages)
 - **UI**: Date picker with quick options:
   - Today
@@ -262,23 +265,27 @@ The Market Data + Evaluated Pricing system enables advisors to:
   - Changing as-of date updates all prices/yields on current page
   - Selected date persisted (localStorage or URL param)
   - Available dates limited to dates with ingested curves
-- **Visual Indicator**: 
+- **Visual Indicator**:
   - Prominently displayed: "Pricing as-of: [date]"
   - Shows curve source metadata
 
 #### As-of Date Selection
+
 - **Available Dates**: List of dates with ingested yield curves
 - **Default**: Most recent date (or current date if available)
 - **Time-Travel**: Users can select historical dates to see historical pricing
 
-#### Events
-- `MarketDataAsOfDateSelected`: As-of date changed (for pricing context)
+#### As-of Date Selection
+
+- As-of date is UI state only (no events needed)
+- Selected date stored in localStorage or URL params
 
 ---
 
 ## 3. Data Models
 
 ### 3.1 Instrument (Prisma model)
+
 - `cusip` (string, PK, unique)
 - `name` (string, instrument description)
 - `ticker` (string, nullable)
@@ -307,10 +314,12 @@ The Market Data + Evaluated Pricing system enables advisors to:
 - `updatedAt` (timestamp)
 
 **Computed Fields** (not stored, computed on demand):
+
 - `maturityBucket` (string: "0-2y", "2-5y", "5-10y", "10-20y", "20y+")
 - Computed from maturity date and current date
 
 ### 3.2 YieldCurve (Prisma model)
+
 - `id` (UUID, PK)
 - `asOfDate` (date, market date)
 - `tenor` (string, e.g., "1M", "3M", "6M", "1Y", "2Y", "3Y", "5Y", "7Y", "10Y", "20Y", "30Y")
@@ -320,18 +329,17 @@ The Market Data + Evaluated Pricing system enables advisors to:
 **Unique Constraint**: `(asOfDate, tenor)` - one yield per tenor per date
 
 **Indexes**:
+
 - `asOfDate` (for efficient date queries)
 
-### 3.3 MarketDataDay (aggregate, projected)
-- `asOfDate` (date, PK)
-- `curvePoints[]` (array of `{tenor, parYield}`)
-- `source` (JSON metadata):
-  - `sourceUrl` (string, nullable, URL/file path)
-  - `sourceHash` (string, nullable, file hash)
-  - `ingestedAt` (timestamp)
-  - `ingestedBy` (actor)
+### 3.3 Yield Curve Query (computed on-demand)
+
+- Query `YieldCurve` table grouped by `asOfDate` to get curve points
+- No projection needed - just query the table directly
+- Returns array of `{tenor, parYield}` for a given `asOfDate`
 
 ### 3.4 EvaluatedPrice (computed, not persisted)
+
 - `instrumentId` (UUID, or CUSIP)
 - `asOfDate` (date)
 - `cleanPrice` (decimal, per $100 par)
@@ -346,21 +354,16 @@ The Market Data + Evaluated Pricing system enables advisors to:
 
 **Note**: Evaluated prices are computed on-demand or cached, but not persisted as primary data (derived from curves + instruments).
 
-### 3.5 Market Data Events
-Market data-related events in the event store:
-- `MarketDataCurveIngested`
-- `MarketDataAsOfDateSelected`
-- `InstrumentIngested`
-- `InstrumentUpdated`
-- `PricingInputsResolved`
-- `EvaluatedPriceComputed`
-- `RiskMetricsComputed`
+### 3.5 Market Data (No Events)
+
+Market data is ingested via scripts and stored directly in database tables. No event sourcing needed - this is a read-only viewer system.
 
 ---
 
 ## 4. User Flows
 
 ### 4.1 Ingest Yield Curve
+
 1. Navigate to `/app/marketdata/curves`
 2. Click "Import Curve" or "Upload Curve"
 3. Select as-of date (market date for curve)
@@ -372,6 +375,7 @@ Market data-related events in the event store:
 9. Curve available for pricing as-of selected date
 
 ### 4.2 View Market Grid
+
 1. Navigate to `/app/marketdata/pricing`
 2. View market grid with all instruments
 3. Apply filters (type, maturity bucket, date range)
@@ -380,6 +384,7 @@ Market data-related events in the event store:
 6. Click CUSIP → navigate to instrument detail
 
 ### 4.3 View Instrument Detail
+
 1. Navigate to instrument detail (from grid, search, or direct link)
 2. View instrument information (CUSIP, type, maturity, coupon)
 3. View evaluated pricing (clean/dirty price, yield, as-of date)
@@ -389,6 +394,7 @@ Market data-related events in the event store:
 7. Click "View Curve" → navigate to curve viewer for as-of date
 
 ### 4.4 View Yield Curve
+
 1. Navigate to `/app/marketdata/curves`
 2. Select as-of date (default: most recent)
 3. View yield curve chart (tenor vs. par yield)
@@ -398,32 +404,24 @@ Market data-related events in the event store:
 7. Export curve data (CSV)
 
 ### 4.5 Search Instrument
+
 1. Navigate to `/app/marketdata/instruments` or use global search
 2. Enter CUSIP or instrument name
 3. View filtered results
 4. Click instrument → navigate to detail
 
-### 4.6 Ingest Instrument
-1. Navigate to `/app/marketdata/instruments`
-2. Click "Import Instruments" or "Add Instrument"
-3. Upload CSV/JSON file OR fill manual form
-4. Enter instrument details (CUSIP, type, maturity, coupon, etc.)
-5. Validate instrument data
-6. Click "Import" or "Save"
-7. System ingests instrument, emits `InstrumentIngested` event
-8. Instrument available in market grid
-
 ---
 
 ## 5. Technical Requirements
 
-### 5.1 Event Sourcing
-- All instrument changes emit events (`InstrumentIngested`, `InstrumentUpdated`)
-- All curve ingestion emits events (`MarketDataCurveIngested`)
-- Pricing computations emit events (`EvaluatedPriceComputed`, `RiskMetricsComputed`)
-- As-of date selection emits events (`MarketDataAsOfDateSelected`)
+### 5.1 Data Ingestion
+
+- Instruments and yield curves are ingested via scripts in `data/` directory
+- No event sourcing needed for market data (read-only viewer)
+- Data is loaded directly into database tables via Python scripts
 
 ### 5.2 Deterministic Pricing
+
 - Pricing must be deterministic (same inputs → same outputs)
 - Use fixed interpolation method (linear or spline)
 - Use fixed solver parameters (tolerance, max iterations)
@@ -431,6 +429,7 @@ Market data-related events in the event store:
 - No randomness in calculations
 
 ### 5.3 Yield Curve Interpolation
+
 - Interpolate yield for instrument maturity from curve points
 - Handle edge cases:
   - Maturity before shortest tenor: extrapolate or use shortest tenor
@@ -438,6 +437,7 @@ Market data-related events in the event store:
 - Method must be deterministic and documented
 
 ### 5.4 Cashflow Generation
+
 - Generate all future cashflows for instrument:
   - Coupon payments (based on coupon frequency, issue date, maturity)
   - Principal repayment (at maturity)
@@ -445,18 +445,21 @@ Market data-related events in the event store:
 - Handle bills (zero coupon): only principal cashflow
 
 ### 5.5 Price Calculation
+
 - **Clean Price**: Present value of cashflows (discounted by yield) / 100
 - **Dirty Price**: Clean price + accrued interest
 - **Accrued Interest**: Calculate based on day count and last coupon date
 - **Yield to Maturity**: Solve iteratively (Newton-Raphson or similar)
 
 ### 5.6 Risk Metrics Calculation
-- **Modified Duration**: 
+
+- **Modified Duration**:
   - Macaulay duration / (1 + yield)
   - Macaulay duration = weighted average time to cashflows
 - **DV01**: Modified Duration × Price × 0.0001 (dollars per $100 par)
 
 ### 5.7 Maturity Bucket Assignment
+
 - Compute maturity bucket from maturity date and current date:
   - 0-2y: maturity within 2 years
   - 2-5y: maturity between 2 and 5 years
@@ -466,6 +469,7 @@ Market data-related events in the event store:
 - Use as-of date for bucket calculation (time-travel support)
 
 ### 5.8 Performance
+
 - Market grid must load < 2s (with all instruments)
 - Instrument detail must load < 1s
 - Curve viewer must load < 1s
@@ -473,6 +477,7 @@ Market data-related events in the event store:
 - Efficient caching of evaluated prices (cache by instrument + as-of date)
 
 ### 5.9 Data Validation
+
 - CUSIP uniqueness validation
 - Maturity date must be after issue date
 - Coupon rate must be >= 0
@@ -485,22 +490,26 @@ Market data-related events in the event store:
 ## 6. Integration Points
 
 ### 6.1 PMS Integration
+
 - Instrument lookup for positions (CUSIP → instrument details)
 - Pricing for portfolio valuation (evaluated prices for positions)
 - Risk metrics for portfolio analytics (duration, DV01 aggregation)
 - Maturity buckets for portfolio targets (bucket weights)
 
 ### 6.2 OMS Integration
+
 - Instrument lookup for order creation (CUSIP → instrument details)
 - Pricing for order valuation (estimated order value)
 - Pricing display in order detail
 
 ### 6.3 EMS Integration
+
 - Pricing for execution simulation (baseline mid price)
 - Curve data for CURVE_RELATIVE orders
 - Maturity buckets for liquidity profiles
 
 ### 6.4 Compliance Integration
+
 - Instrument data for position-level compliance rules
 - Pricing for market value calculations in compliance rules
 
@@ -509,6 +518,7 @@ Market data-related events in the event store:
 ## 7. Mock Data Requirements
 
 For initial development, provide:
+
 - 50-100 sample instruments:
   - Mix of types (bills, notes, bonds, TIPS)
   - Mix of maturities (distributed across buckets)
@@ -524,12 +534,14 @@ For initial development, provide:
 ## 8. UI/UX Considerations
 
 ### 8.1 Pricing Labeling
+
 - **All prices must be labeled**: "Evaluated Price" (not just "Price")
 - **All yields must be labeled**: "Evaluated Yield" (not just "Yield")
 - **As-of date must be prominent**: Show "Pricing as-of: [date]" clearly
 - **Curve source must be visible**: Show curve source metadata (file, date ingested)
 
 ### 8.2 Market Grid
+
 - Virtual scrolling for large instrument sets (if > 1000 instruments)
 - Sortable columns
 - Persistent filter state (URL params or local storage)
@@ -537,18 +549,21 @@ For initial development, provide:
 - Clear visual distinction between evaluated pricing and market data (if both shown)
 
 ### 8.3 Curve Viewer
+
 - Interactive chart (zoom, pan, hover tooltips)
 - Clear axis labels (Tenor, Par Yield %)
 - Tooltips showing exact values
 - Responsive chart (works on different screen sizes)
 
 ### 8.4 Instrument Detail
+
 - Clear section separation (Information, Pricing, Risk Metrics)
 - As-of date selector prominently displayed
 - Pricing clearly labeled as "Evaluated"
 - Historical pricing chart (if implemented)
 
 ### 8.5 As-of Date Selector
+
 - Global component (available on all market data pages)
 - Quick options (Today, Yesterday, etc.)
 - Date picker for custom dates
@@ -556,6 +571,7 @@ For initial development, provide:
 - Disabled dates (dates without curves)
 
 ### 8.6 State Management
+
 - As-of date state (global, affects all pricing)
 - Filter state persistence
 - Loading states for pricing computation (if async)
@@ -566,6 +582,7 @@ For initial development, provide:
 ## 9. Edge Cases & Error Handling
 
 ### 9.1 Missing Yield Curve
+
 - If no curve exists for selected as-of date:
   - Show error message
   - Disable pricing columns
@@ -573,30 +590,33 @@ For initial development, provide:
   - Show available dates
 
 ### 9.2 Instrument Beyond Curve Range
+
 - If instrument maturity is beyond curve's longest tenor:
   - Extrapolate yield (use longest tenor) OR
   - Show warning and use longest tenor yield
   - Document extrapolation method
 
 ### 9.3 Invalid Instrument Data
+
 - Handle missing required fields gracefully
 - Validate CUSIP format
 - Validate date ranges (maturity > issue date)
 - Show validation errors clearly
 
 ### 9.4 Pricing Calculation Errors
+
 - Handle edge cases (bills, zero coupon)
 - Handle invalid yields (negative, extreme values)
 - Return error if pricing cannot be computed
 - Log errors for debugging
 
 ### 9.5 Curve Ingestion Errors
-- Validate curve file format
-- Check for duplicate tenors (per as-of date)
-- Validate par yields (positive, reasonable range)
-- Show validation errors before ingestion
+
+- Handled by ingestion scripts in `data/` directory
+- No UI validation needed (scripts handle validation)
 
 ### 9.6 Missing Instrument Data
+
 - Handle missing optional fields (ratings, etc.)
 - Show "N/A" or "-" for missing data
 - Don't block pricing calculation for missing optional fields
@@ -618,3 +638,48 @@ For initial development, provide:
 
 ---
 
+## 11. Simplified Implementation (No Event Sourcing)
+
+### Overview
+
+Market data is a **read-only viewer** system. Data is ingested via scripts in `data/` directory and stored directly in database tables. No event sourcing patterns needed.
+
+### Schema
+
+- **File**: `client/prisma/schema/data.prisma`
+- `Instrument` model - stores instrument master data
+- `YieldCurve` model - stores yield curve points by date/tenor
+
+### Query Handlers Only
+
+**Files**: `services/api/handlers/marketdata_queries.go`
+
+- `GET /api/views/instruments` - List all instruments (with filters)
+- `GET /api/views/instruments/:cusip` - Get instrument detail
+- `GET /api/views/curves` - Get yield curve for as-of date
+- `GET /api/views/market-grid` - Get instruments with evaluated pricing
+- `GET /api/views/pricing/:cusip` - Get evaluated pricing for instrument (as-of date)
+
+### Pricing Service
+
+**Files**: `services/api/services/pricing/pricing.go`
+
+- **Evaluated Price Calculation**: Compute prices/yields/risk metrics on-demand
+- **Caching**: Cache results by (instrumentId, asOfDate) for performance
+- **No events**: Pricing is computed synchronously when requested
+
+### Frontend Integration
+
+**Files**: `client/app/app/marketdata/**/*.tsx`
+
+- Replace mock data with API calls to query handlers
+- Display instruments, curves, and evaluated pricing
+- As-of date selector (UI state only, no backend events)
+
+### Data Ingestion
+
+- **Instruments**: `data/ingest_security_data.py` → Direct database insert
+- **Yield Curves**: `data/ingest_yield_curves_fred.py` → Direct database insert
+- **No command handlers needed**: Ingestion happens via scripts, not UI
+
+---

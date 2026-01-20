@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Search,
@@ -40,13 +40,13 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import {
-  getFilteredEvents,
-  getModuleColor,
-  getModuleLabel,
-  getAggregateColor,
   formatDateTime,
   formatRelativeTime,
-} from "@/lib/events/mock-data";
+  getAggregateColor,
+  getModuleColor,
+  getModuleLabel,
+} from "@/lib/events/ui";
+import { fetchEventTimeline } from "@/lib/events/api";
 import type {
   EventModule,
   AggregateType,
@@ -78,6 +78,31 @@ export default function EventTimelinePage() {
   const [groupBy, setGroupBy] = useState<EventGroupBy>("none");
   const [viewMode, setViewMode] = useState<TimelineViewMode>("vertical");
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
+  const [eventsData, setEventsData] = useState<EventTimelineItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const loadEvents = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchEventTimeline();
+        if (!active) return;
+        setEventsData(data);
+        setError(null);
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Failed to load events");
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    loadEvents();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const filters: EventFilters = useMemo(() => ({
     module: selectedModules.length > 0 ? selectedModules : undefined,
@@ -89,7 +114,44 @@ export default function EventTimelinePage() {
     searchQuery: searchQuery || undefined,
   }), [selectedModules, selectedAggregateTypes, selectedActorRoles, aggregateId, correlationId, hasExplanation, searchQuery]);
 
-  const events = useMemo(() => getFilteredEvents(filters), [filters]);
+  const events = useMemo(() => {
+    return eventsData.filter((event) => {
+      const matchesModule =
+        !filters.module || filters.module.length === 0 || filters.module.includes(event.module);
+      const matchesAggregateType =
+        !filters.aggregateType || filters.aggregateType.length === 0 ||
+        filters.aggregateType.includes(event.aggregate.type);
+      const matchesActorRole =
+        !filters.actorRole || filters.actorRole.length === 0 ||
+        filters.actorRole.includes(event.actor.role);
+      const matchesAggregateId = !filters.aggregateId || event.aggregate.id === filters.aggregateId;
+      const matchesCorrelation = !filters.correlationId || event.correlationId === filters.correlationId;
+      const matchesExplanation =
+        filters.hasExplanation === undefined || event.hasExplanation === filters.hasExplanation;
+      const matchesSearch =
+        !filters.searchQuery ||
+        event.eventType.toLowerCase().includes(filters.searchQuery.toLowerCase()) ||
+        event.summary.toLowerCase().includes(filters.searchQuery.toLowerCase());
+
+      return (
+        matchesModule &&
+        matchesAggregateType &&
+        matchesActorRole &&
+        matchesAggregateId &&
+        matchesCorrelation &&
+        matchesExplanation &&
+        matchesSearch
+      );
+    });
+  }, [eventsData, filters]);
+
+  if (loading) {
+    return <div className="text-sm text-muted-foreground">Loading events…</div>;
+  }
+
+  if (error) {
+    return <div className="text-sm text-red-600">{error}</div>;
+  }
 
   const groupedEvents = useMemo(() => {
     if (groupBy === "none") {

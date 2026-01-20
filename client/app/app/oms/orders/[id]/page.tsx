@@ -2,7 +2,6 @@
 
 import { use } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   FileText,
@@ -29,15 +28,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
-  getOrderWithDetails,
   getStateColor,
   getComplianceColor,
   formatOrderQuantity,
   formatPrice,
-} from "@/lib/oms/mock-data";
-import { formatDate, formatCurrency } from "@/lib/pms/mock-data";
+} from "@/lib/oms/ui";
+import { formatDate } from "@/lib/pms/ui";
+import { useApproveOrder, useCancelOrder, useOrder, useSendToEMS } from "@/lib/hooks/use-oms";
 
 export default function OrderDetailPage({
   params,
@@ -45,11 +43,20 @@ export default function OrderDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const router = useRouter();
+  const { data: order, isLoading, error } = useOrder(id);
+  const approveMutation = useApproveOrder();
+  const cancelMutation = useCancelOrder();
+  const sendToEMSMutation = useSendToEMS();
 
-  const order = getOrderWithDetails(id);
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96">
+        <p className="text-muted-foreground">Loading order...</p>
+      </div>
+    );
+  }
 
-  if (!order) {
+  if (error || !order) {
     return (
       <div className="flex flex-col items-center justify-center h-96">
         <p className="text-muted-foreground">Order not found</p>
@@ -62,31 +69,40 @@ export default function OrderDetailPage({
 
   const canApprove =
     order.state === "APPROVAL_PENDING" && order.complianceResult?.status !== "BLOCK";
-  const canReject = order.state === "APPROVAL_PENDING";
   const canCancel = !["FILLED", "SETTLED", "CANCELLED", "REJECTED"].includes(order.state);
-  const canAmend = ["DRAFT", "APPROVAL_PENDING", "APPROVED"].includes(order.state);
   const canSendToEms = order.state === "APPROVED";
-  const canDelete = order.state === "DRAFT";
+
+  const handleApprove = async () => {
+    await approveMutation.mutateAsync({ orderId: order.orderId, approvedBy: "advisor@instant.com" });
+  };
+
+  const handleCancel = async () => {
+    await cancelMutation.mutateAsync({ orderId: order.orderId, cancelledBy: "advisor@instant.com" });
+  };
+
+  const handleSendToEms = async () => {
+    await sendToEMSMutation.mutateAsync({ orderId: order.orderId, sentBy: "advisor@instant.com" });
+  };
 
   const getEventIcon = (eventType: string) => {
     switch (eventType) {
-      case "ORDER_CREATED":
+      case "OrderCreated":
         return <FileText className="h-4 w-4 text-gray-600" />;
-      case "ORDER_APPROVAL_REQUESTED":
+      case "OrderApprovalRequested":
         return <Clock className="h-4 w-4 text-blue-600" />;
-      case "ORDER_APPROVED":
+      case "OrderApproved":
         return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case "ORDER_REJECTED":
+      case "OrderRejected":
         return <XCircle className="h-4 w-4 text-red-600" />;
-      case "ORDER_SENT_TO_EMS":
+      case "OrderSentToEMS":
         return <Send className="h-4 w-4 text-cyan-600" />;
-      case "ORDER_PARTIALLY_FILLED":
+      case "OrderPartiallyFilled":
         return <Clock className="h-4 w-4 text-amber-600" />;
-      case "ORDER_FULLY_FILLED":
+      case "OrderFullyFilled":
         return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case "ORDER_CANCELLED":
+      case "OrderCancelled":
         return <X className="h-4 w-4 text-gray-600" />;
-      case "ORDER_AMENDED":
+      case "OrderAmended":
         return <Pencil className="h-4 w-4 text-blue-600" />;
       default:
         return <FileText className="h-4 w-4 text-gray-600" />;
@@ -125,38 +141,30 @@ export default function OrderDetailPage({
           </div>
         </div>
         <div className="flex gap-2">
-          {canDelete && (
-            <Button variant="outline" className="text-destructive">
-              <X className="mr-2 h-4 w-4" />
-              Delete
-            </Button>
-          )}
-          {canAmend && (
-            <Button variant="outline">
-              <Pencil className="mr-2 h-4 w-4" />
-              Amend
-            </Button>
-          )}
           {canCancel && (
-            <Button variant="outline" className="text-destructive">
+            <Button
+              variant="outline"
+              className="text-destructive"
+              onClick={handleCancel}
+              disabled={cancelMutation.isPending}
+            >
               <X className="mr-2 h-4 w-4" />
               Cancel
             </Button>
           )}
-          {canReject && (
-            <Button variant="outline" className="text-destructive">
-              <X className="mr-2 h-4 w-4" />
-              Reject
-            </Button>
-          )}
           {canApprove && (
-            <Button variant="outline" className="text-green-600">
+            <Button
+              variant="outline"
+              className="text-green-600"
+              onClick={handleApprove}
+              disabled={approveMutation.isPending}
+            >
               <Check className="mr-2 h-4 w-4" />
               Approve
             </Button>
           )}
           {canSendToEms && (
-            <Button>
+            <Button onClick={handleSendToEms} disabled={sendToEMSMutation.isPending}>
               <Send className="mr-2 h-4 w-4" />
               Send to EMS
             </Button>
@@ -183,9 +191,9 @@ export default function OrderDetailPage({
                 <div className="space-y-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Instrument</p>
-                    <p className="font-mono font-medium">{order.cusip}</p>
+                    <p className="font-mono font-medium">{order.cusip || order.instrumentId}</p>
                     <p className="text-sm text-muted-foreground">
-                      {order.instrumentDescription}
+                      {order.instrumentName || order.instrumentId}
                     </p>
                   </div>
                   <div>
@@ -233,15 +241,6 @@ export default function OrderDetailPage({
                 </div>
               </div>
 
-              {order.notes && (
-                <>
-                  <Separator className="my-4" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Notes</p>
-                    <p className="mt-1">{order.notes}</p>
-                  </div>
-                </>
-              )}
             </CardContent>
           </Card>
 
@@ -265,13 +264,11 @@ export default function OrderDetailPage({
                   </Badge>
                 </CardTitle>
                 <CardDescription>
-                  Evaluated {formatDate(order.complianceResult.evaluatedAt)}
+                  Checked {formatDate(order.complianceResult.checkedAt)}
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="mb-4">{order.complianceResult.explanation}</p>
-
-                {order.complianceResult.warnings.length > 0 && (
+                {order.complianceResult.warnings && order.complianceResult.warnings.length > 0 && (
                   <div className="mb-4">
                     <h4 className="font-medium text-yellow-600 mb-2 flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4" />
@@ -285,16 +282,16 @@ export default function OrderDetailPage({
                         >
                           <div className="flex items-center justify-between mb-1">
                             <span className="font-medium">{warning.ruleName}</span>
-                            <Badge variant="outline">{warning.scope}</Badge>
+                            <Badge variant="outline">{warning.ruleId}</Badge>
                           </div>
-                          <p className="text-sm text-muted-foreground">{warning.message}</p>
+                          <p className="text-sm text-muted-foreground">{warning.description}</p>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {order.complianceResult.blocks.length > 0 && (
+                {order.complianceResult.blocks && order.complianceResult.blocks.length > 0 && (
                   <div>
                     <h4 className="font-medium text-red-600 mb-2 flex items-center gap-2">
                       <XCircle className="h-4 w-4" />
@@ -308,9 +305,9 @@ export default function OrderDetailPage({
                         >
                           <div className="flex items-center justify-between mb-1">
                             <span className="font-medium">{block.ruleName}</span>
-                            <Badge variant="outline">{block.scope}</Badge>
+                            <Badge variant="outline">{block.ruleId}</Badge>
                           </div>
-                          <p className="text-sm text-muted-foreground">{block.message}</p>
+                          <p className="text-sm text-muted-foreground">{block.description}</p>
                         </div>
                       ))}
                     </div>
@@ -320,81 +317,8 @@ export default function OrderDetailPage({
             </Card>
           )}
 
-          {/* Execution History */}
-          {order.fills.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Execution History</CardTitle>
-                <CardDescription>
-                  {order.filledQuantity > 0 && (
-                    <span>
-                      Filled {formatOrderQuantity(order.filledQuantity)} of{" "}
-                      {formatOrderQuantity(order.quantity)} (
-                      {((order.filledQuantity / order.quantity) * 100).toFixed(1)}%)
-                    </span>
-                  )}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {/* Fill Summary */}
-                <div className="grid gap-4 md:grid-cols-3 mb-6">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Filled</p>
-                    <p className="text-xl font-bold">
-                      {formatOrderQuantity(order.filledQuantity)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Remaining</p>
-                    <p className="text-xl font-bold">
-                      {formatOrderQuantity(order.remainingQuantity)}
-                    </p>
-                  </div>
-                  {order.averageFillPrice && (
-                    <div>
-                      <p className="text-sm text-muted-foreground">Avg Fill Price</p>
-                      <p className="text-xl font-bold">
-                        {formatPrice(order.averageFillPrice)}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Fills Table */}
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Fill ID</TableHead>
-                      <TableHead className="text-right">Quantity</TableHead>
-                      <TableHead className="text-right">Price</TableHead>
-                      <TableHead className="text-right">Value</TableHead>
-                      <TableHead>Timestamp</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {order.fills.map((fill) => (
-                      <TableRow key={fill.fillId}>
-                        <TableCell className="font-mono text-sm">{fill.fillId}</TableCell>
-                        <TableCell className="text-right">
-                          {formatOrderQuantity(fill.quantity)}
-                        </TableCell>
-                        <TableCell className="text-right">{formatPrice(fill.price)}</TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(fill.quantity * (fill.price / 100))}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {formatDate(fill.timestamp)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Event Timeline */}
-          {order.events.length > 0 && (
+          {order.events && order.events.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle>Event Timeline</CardTitle>
@@ -408,21 +332,25 @@ export default function OrderDetailPage({
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
                           {getEventIcon(event.eventType)}
                         </div>
-                        {idx < order.events.length - 1 && (
+                        {idx < order.events!.length - 1 && (
                           <div className="w-px h-full bg-border mt-2" />
                         )}
                       </div>
                       <div className="flex-1 pb-4">
                         <div className="flex items-center justify-between">
                           <p className="font-medium">
-                            {event.eventType.replace(/_/g, " ").replace("ORDER ", "")}
+                            {event.eventType.replace(/([A-Z])/g, " $1").trim()}
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            {formatDate(event.timestamp)}
+                            {formatDate(event.occurredAt)}
                           </p>
                         </div>
-                        <p className="text-sm text-muted-foreground">{event.details}</p>
-                        <p className="text-xs text-muted-foreground mt-1">by {event.actor}</p>
+                        {event.explanation && (
+                          <p className="text-sm text-muted-foreground">{event.explanation}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-1">
+                          by {event.actor?.actorId || "system"}
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -446,8 +374,8 @@ export default function OrderDetailPage({
               >
                 <Briefcase className="h-5 w-5 text-muted-foreground" />
                 <div>
-                  <p className="font-medium">{order.accountName}</p>
-                  <p className="text-sm text-muted-foreground">{order.householdName}</p>
+                  <p className="font-medium">{order.accountName || order.accountId}</p>
+                  <p className="text-sm text-muted-foreground">{order.householdId || "Unknown"}</p>
                 </div>
               </Link>
             </CardContent>
@@ -464,7 +392,7 @@ export default function OrderDetailPage({
                 className="flex items-center gap-3 hover:text-primary"
               >
                 <Building2 className="h-5 w-5 text-muted-foreground" />
-                <span className="font-medium">{order.householdName}</span>
+                <span className="font-medium">{order.householdId || "Unknown"}</span>
               </Link>
             </CardContent>
           </Card>
@@ -523,24 +451,6 @@ export default function OrderDetailPage({
             </Card>
           )}
 
-          {/* PnL */}
-          {order.estimatedPnL !== undefined && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Estimated P&L</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p
-                  className={`text-2xl font-bold ${
-                    order.estimatedPnL >= 0 ? "text-green-600" : "text-red-600"
-                  }`}
-                >
-                  {order.estimatedPnL >= 0 ? "+" : ""}
-                  {formatCurrency(order.estimatedPnL)}
-                </p>
-              </CardContent>
-            </Card>
-          )}
         </div>
       </div>
     </div>

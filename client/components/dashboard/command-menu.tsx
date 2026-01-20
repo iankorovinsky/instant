@@ -31,6 +31,8 @@ import {
   ArrowRight,
   Check,
   X,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 import {
   CommandDialog,
@@ -47,11 +49,12 @@ import {
   allCommands,
   searchCommands,
   groupCommands,
-  parseAgentCommand,
   categoryLabels,
   getContextCommands,
 } from "@/lib/command/commands";
-import type { Command as CommandType, AgentResponse } from "@/lib/command/types";
+import type { Command as CommandType } from "@/lib/command/types";
+import { useCopilot } from "@/lib/hooks/use-copilot";
+import type { CommandPlan } from "@/lib/api/copilot";
 
 // Icon mapping
 const iconMap: Record<string, React.ReactNode> = {
@@ -88,8 +91,9 @@ export function CommandMenu() {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const [agentMode, setAgentMode] = React.useState(false);
-  const [agentResponse, setAgentResponse] = React.useState<AgentResponse | null>(null);
-  const [agentLoading, setAgentLoading] = React.useState(false);
+
+  // Use the copilot hook
+  const copilot = useCopilot("user");
 
   // Create command context
   const commandContext = React.useMemo(() => ({
@@ -130,9 +134,9 @@ export function CommandMenu() {
     if (!open) {
       setSearch("");
       setAgentMode(false);
-      setAgentResponse(null);
+      copilot.clear();
     }
-  }, [open]);
+  }, [open, copilot]);
 
   // Handle command selection
   const handleSelect = (command: CommandType) => {
@@ -148,34 +152,86 @@ export function CommandMenu() {
     }
   };
 
-  // Activate agent mode
+  // Activate agent mode and call copilot API
   const activateAgentMode = async () => {
     setAgentMode(true);
-    setAgentLoading(true);
-
-    // Simulate AI processing delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    const response = parseAgentCommand(search);
-    setAgentResponse(response);
-    setAgentLoading(false);
+    try {
+      await copilot.propose(search, {
+        currentRoute: pathname,
+      });
+    } catch (error) {
+      console.error("Failed to get copilot response:", error);
+    }
   };
 
-  // Execute agent action
-  const executeAgentAction = () => {
-    if (agentResponse?.route) {
-      const url = agentResponse.queryParams
-        ? `${agentResponse.route}?${new URLSearchParams(agentResponse.queryParams).toString()}`
-        : agentResponse.route;
+  // Execute the copilot plan
+  const executeAgentAction = async () => {
+    const plan = copilot.currentPlan;
+    if (!plan) return;
+
+    // If it's a navigation-only plan, just navigate
+    if (plan.route && plan.commands.length === 0) {
+      const url = plan.queryParams
+        ? `${plan.route}?${new URLSearchParams(plan.queryParams).toString()}`
+        : plan.route;
       router.push(url);
+      setOpen(false);
+      return;
     }
-    setOpen(false);
+
+    // Execute the commands
+    try {
+      await copilot.execute();
+      // If there's a route, navigate after execution
+      if (plan.route) {
+        const url = plan.queryParams
+          ? `${plan.route}?${new URLSearchParams(plan.queryParams).toString()}`
+          : plan.route;
+        router.push(url);
+      }
+      setOpen(false);
+    } catch (error) {
+      console.error("Failed to execute plan:", error);
+    }
   };
 
   // Cancel agent mode
-  const cancelAgentMode = () => {
+  const cancelAgentMode = async () => {
+    await copilot.reject("User cancelled");
     setAgentMode(false);
-    setAgentResponse(null);
+  };
+
+  // Get confidence color
+  const getConfidenceColor = (confidence: number) => {
+    if (confidence >= 0.8) return "text-green-500";
+    if (confidence >= 0.6) return "text-yellow-500";
+    return "text-red-500";
+  };
+
+  // Render command list for the plan
+  const renderPlanCommands = (plan: CommandPlan) => {
+    if (plan.commands.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="mt-4 space-y-2">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          Commands to Execute
+        </p>
+        <div className="space-y-1.5">
+          {plan.commands.map((cmd, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-2 p-2 bg-muted/30 rounded text-sm"
+            >
+              <Zap className="h-3.5 w-3.5 text-primary shrink-0" />
+              <span className="font-mono text-xs">{cmd.commandType}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -190,7 +246,7 @@ export function CommandMenu() {
         <span className="hidden lg:inline-flex">Search commands...</span>
         <span className="inline-flex lg:hidden">Search...</span>
         <kbd className="pointer-events-none absolute right-1.5 top-1.5 hidden h-6 select-none items-center gap-1 rounded border bg-background px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
-          <span className="text-xs">⌘</span>K
+          <span className="text-xs">&#8984;</span>K
         </kbd>
       </Button>
 
@@ -290,11 +346,11 @@ export function CommandMenu() {
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <div className="flex items-center gap-3">
                   <span className="flex items-center gap-1.5">
-                    <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">↑↓</kbd>
+                    <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">&#8593;&#8595;</kbd>
                     <span>Navigate</span>
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">↵</kbd>
+                    <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">&#8629;</kbd>
                     <span>Select</span>
                   </span>
                   <span className="flex items-center gap-1.5">
@@ -315,45 +371,128 @@ export function CommandMenu() {
               <div>
                 <h3 className="font-semibold text-base">AI Copilot</h3>
                 <p className="text-sm text-muted-foreground">
-                  {agentLoading ? "Thinking..." : "Here's what I understood"}
+                  {copilot.isProposing ? "Thinking..." : copilot.isExecuting ? "Executing..." : "Here's what I understood"}
                 </p>
               </div>
             </div>
 
-            {agentLoading ? (
+            {copilot.isProposing ? (
               <div className="flex flex-col items-center justify-center py-12">
-                <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent mb-4" />
+                <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
                 <p className="text-sm text-muted-foreground">Processing your request...</p>
               </div>
-            ) : agentResponse ? (
+            ) : copilot.proposeError ? (
+              <div className="space-y-5">
+                <div className="p-5 bg-destructive/10 rounded-lg border border-destructive/20">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="h-4 w-4 text-destructive" />
+                    <span className="font-medium text-sm text-destructive">Error</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {copilot.proposeError.message || "Failed to process your request"}
+                  </p>
+                </div>
+                <Button variant="outline" onClick={cancelAgentMode} className="w-full">
+                  Try Again
+                </Button>
+              </div>
+            ) : copilot.currentPlan ? (
               <div className="space-y-5">
                 <div className="p-5 bg-secondary/50 rounded-lg border border-border/50">
                   <p className="text-sm text-muted-foreground mb-3 leading-relaxed">
-                    {agentResponse.interpretation}
+                    {copilot.currentPlan.rationale.summary}
                   </p>
-                  <div className="flex items-center gap-2 pt-2 border-t border-border/50">
-                    <ArrowRight className="h-4 w-4 text-primary shrink-0" />
-                    <span className="font-medium text-sm">{agentResponse.proposedAction}</span>
-                  </div>
-                  {agentResponse.route && (
-                    <p className="text-xs text-muted-foreground mt-3 font-mono bg-muted/50 px-2 py-1.5 rounded">
-                      → {agentResponse.route}
+
+                  {copilot.currentPlan.rationale.reasoning && (
+                    <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+                      {copilot.currentPlan.rationale.reasoning}
                     </p>
+                  )}
+
+                  {copilot.currentPlan.route && (
+                    <div className="flex items-center gap-2 pt-2 border-t border-border/50">
+                      <ArrowRight className="h-4 w-4 text-primary shrink-0" />
+                      <span className="font-medium text-sm">Navigate to {copilot.currentPlan.route}</span>
+                    </div>
+                  )}
+
+                  {renderPlanCommands(copilot.currentPlan)}
+
+                  {copilot.currentPlan.assumptions.length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-border/50">
+                      <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+                        Assumptions
+                      </p>
+                      <ul className="text-xs text-muted-foreground space-y-1">
+                        {copilot.currentPlan.assumptions.map((assumption, i) => (
+                          <li key={i} className="flex items-start gap-2">
+                            <span className="text-muted-foreground/50">-</span>
+                            <span>{assumption}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {copilot.currentPlan.expectedEvents.length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-border/50">
+                      <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+                        Expected Events
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {copilot.currentPlan.expectedEvents.map((event, i) => (
+                          <Badge key={i} variant="outline" className="text-xs">
+                            {event}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
 
                 <div className="flex items-center justify-between px-1">
                   <div className="text-xs text-muted-foreground">
-                    Confidence: <span className="font-medium text-foreground">{Math.round(agentResponse.confidence * 100)}%</span>
+                    Confidence:{" "}
+                    <span className={`font-medium ${getConfidenceColor(copilot.currentPlan.confidence)}`}>
+                      {Math.round(copilot.currentPlan.confidence * 100)}%
+                    </span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3 pt-2">
-                  <Button onClick={executeAgentAction} className="flex-1" size="default">
-                    <Check className="h-4 w-4 mr-2" />
-                    Execute
+                  <Button
+                    onClick={executeAgentAction}
+                    className="flex-1"
+                    size="default"
+                    disabled={copilot.isExecuting}
+                  >
+                    {copilot.isExecuting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Executing...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-4 w-4 mr-2" />
+                        {copilot.currentPlan.commands.length > 0 ? "Execute" : "Navigate"}
+                      </>
+                    )}
+                  </Button>
+                  <Button variant="outline" onClick={cancelAgentMode} disabled={copilot.isExecuting}>
+                    <X className="h-4 w-4" />
                   </Button>
                 </div>
+
+                {copilot.executeError && (
+                  <div className="p-3 bg-destructive/10 rounded-lg border border-destructive/20 mt-3">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 text-destructive" />
+                      <span className="text-sm text-destructive">
+                        {copilot.executeError.message || "Execution failed"}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="text-center py-8">
@@ -367,8 +506,8 @@ export function CommandMenu() {
                 </div>
                 <div className="space-y-2 text-sm mb-6">
                   <p className="text-muted-foreground">"Go to orders"</p>
-                  <p className="text-muted-foreground">"Create an order"</p>
-                  <p className="text-muted-foreground">"Run optimization"</p>
+                  <p className="text-muted-foreground">"Create an order to buy 100 units of T-Note"</p>
+                  <p className="text-muted-foreground">"Run optimization for account ABC123"</p>
                 </div>
                 <Button variant="outline" onClick={cancelAgentMode}>
                   Try Again

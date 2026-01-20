@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useMemo } from "react";
+import { use, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -33,9 +33,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  getInstrumentWithPricing,
-  getAvailableCurveDates,
-  yieldCurves,
+  useCurveDates,
+  useInstrumentDetail,
+  usePricingHistory,
+} from "@/lib/hooks/use-marketdata";
+import { useMarketDataAsOfDate } from "@/lib/marketdata/use-asof-date";
+import {
   getTypeColor,
   getBucketColor,
   formatDate,
@@ -44,9 +47,8 @@ import {
   formatYield,
   formatDuration,
   formatLargeNumber,
-  formatNumber,
   formatPercent,
-} from "@/lib/marketdata/mock-data";
+} from "@/lib/marketdata/formatters";
 
 interface PageProps {
   params: Promise<{ cusip: string }>;
@@ -55,29 +57,41 @@ interface PageProps {
 export default function InstrumentDetailPage({ params }: PageProps) {
   const { cusip } = use(params);
   const router = useRouter();
-  const availableDates = getAvailableCurveDates();
+  const { data: availableDates = [] } = useCurveDates();
+  const { asOfDate, setAsOfDate } = useMarketDataAsOfDate(availableDates);
+  const { data: instrument, isLoading, error } = useInstrumentDetail(cusip, asOfDate ?? undefined);
+  const { data: pricingHistoryData } = usePricingHistory(cusip, 10);
 
-  const [asOfDate, setAsOfDate] = useState<Date>(availableDates[0]);
-
-  const instrument = useMemo(() => {
-    return getInstrumentWithPricing(cusip, asOfDate);
-  }, [cusip, asOfDate]);
-
-  // Generate pricing history from available dates
   const pricingHistory = useMemo(() => {
-    return availableDates.map((date) => {
-      const inst = getInstrumentWithPricing(cusip, date);
-      return {
-        date,
-        price: inst?.evaluatedPrice?.cleanPrice,
-        yield: inst?.evaluatedPrice?.yieldToMaturity,
-        duration: inst?.evaluatedPrice?.modifiedDuration,
-        dv01: inst?.evaluatedPrice?.dv01,
-      };
-    }).filter((h) => h.price !== undefined);
-  }, [cusip, availableDates]);
+    return (pricingHistoryData || []).map((price) => ({
+      date: price.asOfDate,
+      price: price.cleanPrice,
+      yield: price.yieldToMaturity,
+      duration: price.modifiedDuration,
+      dv01: price.dv01,
+    }));
+  }, [pricingHistoryData]);
 
-  if (!instrument) {
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Button variant="ghost" onClick={() => router.back()}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center text-muted-foreground">
+              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium">Loading instrument...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (error || !instrument) {
     return (
       <div className="space-y-6">
         <Button variant="ghost" onClick={() => router.back()}>
@@ -97,7 +111,8 @@ export default function InstrumentDetailPage({ params }: PageProps) {
     );
   }
 
-  const yearsToMaturity = (instrument.maturityDate.getTime() - asOfDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+  const pricingDate = asOfDate ?? new Date();
+  const yearsToMaturity = (instrument.maturityDate.getTime() - pricingDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
 
   return (
     <div className="space-y-6">
@@ -124,8 +139,9 @@ export default function InstrumentDetailPage({ params }: PageProps) {
           <Calendar className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm">As-of Date:</span>
           <Select
-            value={asOfDate.toISOString()}
+            value={asOfDate?.toISOString() ?? ""}
             onValueChange={(value) => setAsOfDate(new Date(value))}
+            disabled={!asOfDate}
           >
             <SelectTrigger className="w-[140px]">
               <SelectValue />
@@ -146,7 +162,7 @@ export default function InstrumentDetailPage({ params }: PageProps) {
         <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Clean Price</CardTitle>
+              <CardTitle className="text-sm font-medium">Evaluated Clean Price</CardTitle>
               <DollarSign className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
@@ -161,7 +177,7 @@ export default function InstrumentDetailPage({ params }: PageProps) {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Yield to Maturity</CardTitle>
+              <CardTitle className="text-sm font-medium">Evaluated Yield</CardTitle>
               <Percent className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
@@ -335,8 +351,8 @@ export default function InstrumentDetailPage({ params }: PageProps) {
             <TableHeader>
               <TableRow>
                 <TableHead>As-of Date</TableHead>
-                <TableHead className="text-right">Clean Price</TableHead>
-                <TableHead className="text-right">Yield to Maturity</TableHead>
+                <TableHead className="text-right">Evaluated Clean Price</TableHead>
+                <TableHead className="text-right">Evaluated Yield</TableHead>
                 <TableHead className="text-right">Modified Duration</TableHead>
                 <TableHead className="text-right">DV01</TableHead>
               </TableRow>

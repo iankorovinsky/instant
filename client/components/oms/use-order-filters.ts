@@ -2,15 +2,14 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { accounts } from "@/lib/pms/mock-data";
-import type { Order, OrderState, ComplianceStatus, OrderType } from "@/lib/oms/types";
+import type { Order, OrderState, OrderType } from "@/lib/api/oms";
 
 export interface OrderFilters {
   selectedStates: Set<OrderState>;
   selectedSides: Set<"BUY" | "SELL">;
   selectedOrderTypes: Set<OrderType>;
   selectedHouseholds: Set<string>;
-  selectedCompliance: Set<ComplianceStatus>;
+  selectedCompliance: Set<"PASS" | "WARN" | "BLOCK">;
   searchQuery: string;
 }
 
@@ -21,15 +20,22 @@ export interface UseOrderFiltersReturn {
   toggleSide: (side: "BUY" | "SELL") => void;
   toggleOrderType: (type: OrderType) => void;
   toggleHousehold: (householdId: string) => void;
-  toggleCompliance: (status: ComplianceStatus) => void;
+  toggleCompliance: (status: "PASS" | "WARN" | "BLOCK") => void;
   clearAllFilters: () => void;
   activeFilterCount: number;
   filterOrders: (orders: Order[]) => Order[];
 }
 
 const ORDER_STATES: OrderState[] = [
-  "DRAFT", "STAGED", "APPROVAL_PENDING", "APPROVED", "SENT",
-  "PARTIALLY_FILLED", "FILLED", "CANCELLED", "REJECTED", "SETTLED"
+  "DRAFT",
+  "APPROVAL_PENDING",
+  "APPROVED",
+  "SENT",
+  "PARTIALLY_FILLED",
+  "FILLED",
+  "CANCELLED",
+  "REJECTED",
+  "SETTLED",
 ];
 
 export function useOrderFilters(): UseOrderFiltersReturn {
@@ -51,7 +57,9 @@ export function useOrderFilters(): UseOrderFiltersReturn {
   const [selectedSides, setSelectedSides] = useState<Set<"BUY" | "SELL">>(new Set());
   const [selectedOrderTypes, setSelectedOrderTypes] = useState<Set<OrderType>>(new Set());
   const [selectedHouseholds, setSelectedHouseholds] = useState<Set<string>>(new Set());
-  const [selectedCompliance, setSelectedCompliance] = useState<Set<ComplianceStatus>>(new Set());
+  const [selectedCompliance, setSelectedCompliance] = useState<Set<"PASS" | "WARN" | "BLOCK">>(
+    new Set()
+  );
 
   // Sync state filter with URL params
   useEffect(() => {
@@ -93,7 +101,7 @@ export function useOrderFilters(): UseOrderFiltersReturn {
     toggleSetItem(selectedHouseholds, householdId, setSelectedHouseholds);
   };
 
-  const toggleCompliance = (status: ComplianceStatus) => {
+  const toggleCompliance = (status: "PASS" | "WARN" | "BLOCK") => {
     toggleSetItem(selectedCompliance, status, setSelectedCompliance);
   };
 
@@ -115,8 +123,8 @@ export function useOrderFilters(): UseOrderFiltersReturn {
       // Search filter
       const matchesSearch =
         searchQuery === "" ||
-        order.cusip.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        order.instrumentDescription.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (order.cusip || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (order.instrumentName || order.instrumentId || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
         order.orderId.toLowerCase().includes(searchQuery.toLowerCase());
 
       // State filter
@@ -129,9 +137,9 @@ export function useOrderFilters(): UseOrderFiltersReturn {
       const matchesOrderType = selectedOrderTypes.size === 0 || selectedOrderTypes.has(order.orderType);
 
       // Household filter
-      const account = accounts.find((a) => a.accountId === order.accountId);
-      const matchesHousehold = selectedHouseholds.size === 0 ||
-        (account && selectedHouseholds.has(account.householdId));
+      const matchesHousehold =
+        selectedHouseholds.size === 0 ||
+        (order.householdId && selectedHouseholds.has(order.householdId));
 
       // Compliance filter
       const matchesCompliance = selectedCompliance.size === 0 ||

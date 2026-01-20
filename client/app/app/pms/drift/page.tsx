@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -31,22 +31,38 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import {
-  portfolioDrift,
-  accounts,
-  households,
-  portfolioModels,
-  getDriftStatus,
-  formatDate,
-  formatPercent,
-} from "@/lib/pms/mock-data";
+import { getDriftStatus, formatDate, formatPercent } from "@/lib/pms/ui";
+import { getAccounts, getDrift, getHouseholds } from "@/lib/api/pms";
 
 type DriftFilter = "all" | "in_tolerance" | "warning" | "out_of_tolerance";
 
 export default function DriftDashboardPage() {
   const router = useRouter();
   const [driftFilter, setDriftFilter] = useState<DriftFilter>("all");
-  const [lastRefresh] = useState(new Date());
+  const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [portfolioDrift, setPortfolioDrift] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [households, setHouseholds] = useState<any[]>([]);
+
+  const loadDrift = async () => {
+    try {
+      const [driftResponse, accountsResponse, householdsResponse] = await Promise.all([
+        getDrift(),
+        getAccounts(),
+        getHouseholds(),
+      ]);
+      setPortfolioDrift(driftResponse.drift);
+      setAccounts(accountsResponse.accounts);
+      setHouseholds(householdsResponse.households);
+      setLastRefresh(new Date());
+    } catch (err) {
+      console.error("Failed to load drift data", err);
+    }
+  };
+
+  useEffect(() => {
+    loadDrift();
+  }, []);
 
   // Enrich drift data with account and model info
   const enrichedDrift = portfolioDrift.map((drift) => {
@@ -54,16 +70,14 @@ export default function DriftDashboardPage() {
     const household = account
       ? households.find((h) => h.householdId === account.householdId)
       : null;
-    const model = account?.modelId
-      ? portfolioModels.find((m) => m.modelId === account.modelId)
-      : null;
+    const modelId = account?.modelId;
     const status = getDriftStatus(drift.overallDrift);
 
     return {
       ...drift,
       account,
       household,
-      model,
+      modelId,
       status,
     };
   });
@@ -121,7 +135,7 @@ export default function DriftDashboardPage() {
           <p className="text-sm text-muted-foreground">
             Last updated: {formatDate(lastRefresh)}
           </p>
-          <Button variant="outline">
+          <Button variant="outline" onClick={loadDrift}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
@@ -150,7 +164,10 @@ export default function DriftDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">{inTolerance}</div>
-            <Progress value={(inTolerance / enrichedDrift.length) * 100} className="mt-2 h-1" />
+            <Progress
+              value={enrichedDrift.length ? (inTolerance / enrichedDrift.length) * 100 : 0}
+              className="mt-2 h-1"
+            />
           </CardContent>
         </Card>
 
@@ -165,7 +182,7 @@ export default function DriftDashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold text-yellow-600">{warnings}</div>
             <Progress
-              value={(warnings / enrichedDrift.length) * 100}
+              value={enrichedDrift.length ? (warnings / enrichedDrift.length) * 100 : 0}
               className="mt-2 h-1 [&>div]:bg-yellow-500"
             />
           </CardContent>
@@ -182,7 +199,7 @@ export default function DriftDashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold text-red-600">{outOfTolerance}</div>
             <Progress
-              value={(outOfTolerance / enrichedDrift.length) * 100}
+              value={enrichedDrift.length ? (outOfTolerance / enrichedDrift.length) * 100 : 0}
               className="mt-2 h-1 [&>div]:bg-red-500"
             />
           </CardContent>
@@ -254,7 +271,7 @@ export default function DriftDashboardPage() {
                     </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {drift.model?.name || "No model"}
+                    {drift.modelId || "No model"}
                   </TableCell>
                   <TableCell className="text-right font-medium">
                     {drift.currentDuration.toFixed(2)}y
@@ -295,7 +312,9 @@ export default function DriftDashboardPage() {
                   </TableCell>
                   <TableCell>{getStatusBadge(drift.status.status)}</TableCell>
                   <TableCell className="text-right text-muted-foreground">
-                    {drift.lastRebalancedAt ? formatDate(drift.lastRebalancedAt) : "Never"}
+                    {drift.lastRebalancedAt
+                      ? formatDate(new Date(drift.lastRebalancedAt))
+                      : "Never"}
                   </TableCell>
                   <TableCell>
                     <Button
@@ -354,7 +373,7 @@ export default function DriftDashboardPage() {
                     </Button>
                   </div>
                   <div className="flex gap-2">
-                    {Object.entries(drift.bucketDrifts).map(([bucket, driftValue]) => (
+                    {(Object.entries(drift.bucketDrifts) as [string, number][]).map(([bucket, driftValue]) => (
                       <div key={bucket} className="flex-1">
                         <div className="text-center mb-2">
                           <div className="text-sm font-medium">{bucket}</div>

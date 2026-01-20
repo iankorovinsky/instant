@@ -1,14 +1,12 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Shield,
   Edit,
   Power,
-  Trash2,
   Globe,
   Building2,
   Briefcase,
@@ -30,11 +28,25 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
-  getRuleById,
-  getRuleVersions,
-  getViolationsForRule,
-  getEvaluationsForRule,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   getSeverityColor,
   getScopeColor,
   getStatusColor,
@@ -45,8 +57,25 @@ import {
   formatDate,
   formatDateTime,
   formatNumber,
-} from "@/lib/compliance/mock-data";
-import type { RuleScope } from "@/lib/compliance/types";
+} from "@/lib/compliance/ui";
+import {
+  disableComplianceRule,
+  enableComplianceRule,
+  fetchComplianceRuleDetail,
+  updateComplianceRule,
+} from "@/lib/compliance/api";
+import type {
+  Evaluation,
+  EvaluationPoint,
+  MetricType,
+  PredicateOperator,
+  Rule,
+  RuleScope,
+  RuleSeverity,
+  RuleStatus,
+  RuleVersion,
+  Violation,
+} from "@/lib/compliance/types";
 
 export default function RuleDetailPage({
   params,
@@ -54,12 +83,88 @@ export default function RuleDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const router = useRouter();
+  const actorId = "ui@instant.com";
 
-  const rule = getRuleById(id);
-  const versions = getRuleVersions(id);
-  const violations = getViolationsForRule(id);
-  const evaluations = getEvaluationsForRule(id);
+  const [rule, setRule] = useState<Rule | null>(null);
+  const [versions, setVersions] = useState<RuleVersion[]>([]);
+  const [violations, setViolations] = useState<Violation[]>([]);
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editState, setEditState] = useState({
+    name: "",
+    description: "",
+    severity: "BLOCK" as RuleSeverity,
+    scope: "GLOBAL" as RuleScope,
+    scopeId: "",
+    metric: metricDefinitions[0]?.id ?? "portfolio.duration",
+    operator: operatorDefinitions[0]?.id ?? "<=",
+    value: "",
+    explanationTemplate: "",
+    evaluationPoints: ["PRE_TRADE"] as EvaluationPoint[],
+    status: "ACTIVE" as RuleStatus,
+    effectiveFrom: "",
+    effectiveTo: "",
+    instrumentCusip: "",
+  });
+
+  useEffect(() => {
+    let active = true;
+
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const detail = await fetchComplianceRuleDetail(id);
+        if (!active) return;
+        setRule(detail.rule);
+        setVersions(detail.versions);
+        setViolations(detail.violations);
+        setEvaluations(detail.evaluations);
+        setError(null);
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Failed to load rule");
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    if (id) {
+      loadData();
+    }
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  useEffect(() => {
+    if (!rule) return;
+    setEditState({
+      name: rule.name,
+      description: rule.description || "",
+      severity: rule.severity,
+      scope: rule.scope,
+      scopeId: rule.scopeId || "",
+      metric: rule.predicate.metric,
+      operator: rule.predicate.operator,
+      value: String(rule.predicate.value ?? ""),
+      explanationTemplate: rule.explanationTemplate,
+      evaluationPoints: rule.evaluationPoints,
+      status: rule.status,
+      effectiveFrom: rule.effectiveFrom ? rule.effectiveFrom.toISOString().slice(0, 16) : "",
+      effectiveTo: rule.effectiveTo ? rule.effectiveTo.toISOString().slice(0, 16) : "",
+      instrumentCusip: rule.predicate.instrumentFilter?.cusip || "",
+    });
+  }, [rule]);
+
+  if (loading) {
+    return <div className="text-sm text-muted-foreground">Loading rule…</div>;
+  }
+
+  if (error) {
+    return <div className="text-sm text-red-600">{error}</div>;
+  }
 
   if (!rule) {
     return (
@@ -73,7 +178,6 @@ export default function RuleDetailPage({
   }
 
   const metricInfo = metricDefinitions.find((m) => m.id === rule.predicate.metric);
-  const operatorInfo = operatorDefinitions.find((o) => o.id === rule.predicate.operator);
   const activeViolations = violations.filter((v) => v.status === "ACTIVE");
 
   const getScopeIcon = (scope: RuleScope) => {
@@ -85,6 +189,75 @@ export default function RuleDetailPage({
       case "ACCOUNT":
         return <Briefcase className="h-5 w-5" />;
     }
+  };
+
+  const handleToggleStatus = async () => {
+    if (!rule) return;
+    if (rule.status === "ACTIVE") {
+      await disableComplianceRule(rule.ruleId, actorId);
+    } else {
+      await enableComplianceRule(rule.ruleId, actorId);
+    }
+    const detail = await fetchComplianceRuleDetail(rule.ruleId);
+    setRule(detail.rule);
+  };
+
+  const toggleEvaluationPoint = (point: EvaluationPoint) => {
+    setEditState((prev) => {
+      const exists = prev.evaluationPoints.includes(point);
+      return {
+        ...prev,
+        evaluationPoints: exists
+          ? prev.evaluationPoints.filter((item) => item !== point)
+          : [...prev.evaluationPoints, point],
+      };
+    });
+  };
+
+  const handleUpdateRule = async () => {
+    if (!rule) return;
+    const metricInfo = metricDefinitions.find((metric) => metric.id === editState.metric);
+    const parsedValue =
+      metricInfo?.valueType === "enum"
+        ? editState.value
+        : Number.parseFloat(editState.value);
+
+    const predicate: Rule["predicate"] = {
+      metric: editState.metric,
+      operator: editState.operator,
+      value: Number.isNaN(parsedValue) ? editState.value : parsedValue,
+    };
+
+    if (editState.metric.startsWith("position.") && editState.instrumentCusip) {
+      predicate.instrumentFilter = { cusip: editState.instrumentCusip };
+    }
+
+    const effectiveFrom = editState.effectiveFrom
+      ? new Date(editState.effectiveFrom).toISOString()
+      : undefined;
+    const effectiveTo = editState.effectiveTo ? new Date(editState.effectiveTo).toISOString() : undefined;
+
+    await updateComplianceRule(rule.ruleId, {
+      name: editState.name,
+      description: editState.description || undefined,
+      severity: editState.severity,
+      scope: editState.scope,
+      scopeId: editState.scopeId || undefined,
+      predicate,
+      explanationTemplate: editState.explanationTemplate,
+      evaluationPoints: editState.evaluationPoints,
+      status: editState.status,
+      effectiveFrom,
+      effectiveTo,
+      updatedBy: actorId,
+    });
+
+    const detail = await fetchComplianceRuleDetail(rule.ruleId);
+    setRule(detail.rule);
+    setVersions(detail.versions);
+    setViolations(detail.violations);
+    setEvaluations(detail.evaluations);
+    setIsEditOpen(false);
   };
 
   return (
@@ -118,16 +291,218 @@ export default function RuleDetailPage({
             <PlayCircle className="mr-2 h-4 w-4" />
             Test Rule
           </Button>
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleToggleStatus}>
             <Power className="mr-2 h-4 w-4" />
             {rule.status === "ACTIVE" ? "Disable" : "Enable"}
           </Button>
-          <Button>
+          <Button onClick={() => setIsEditOpen(true)}>
             <Edit className="mr-2 h-4 w-4" />
             Edit Rule
           </Button>
         </div>
       </div>
+
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Edit Rule</DialogTitle>
+            <DialogDescription>Update rule definition and create a new version.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="editRuleName">Rule Name</Label>
+              <Input
+                id="editRuleName"
+                value={editState.name}
+                onChange={(e) => setEditState((prev) => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select
+                value={editState.status}
+                onValueChange={(value) =>
+                  setEditState((prev) => ({ ...prev, status: value as RuleStatus }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ACTIVE">Active</SelectItem>
+                  <SelectItem value="INACTIVE">Inactive</SelectItem>
+                  <SelectItem value="DRAFT">Draft</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="editDescription">Description</Label>
+              <Textarea
+                id="editDescription"
+                value={editState.description}
+                onChange={(e) => setEditState((prev) => ({ ...prev, description: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Severity</Label>
+              <Select
+                value={editState.severity}
+                onValueChange={(value) =>
+                  setEditState((prev) => ({ ...prev, severity: value as RuleSeverity }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Severity" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="BLOCK">Block</SelectItem>
+                  <SelectItem value="WARN">Warn</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Scope</Label>
+              <Select
+                value={editState.scope}
+                onValueChange={(value) =>
+                  setEditState((prev) => ({ ...prev, scope: value as RuleScope }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Scope" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="GLOBAL">Global</SelectItem>
+                  <SelectItem value="HOUSEHOLD">Household</SelectItem>
+                  <SelectItem value="ACCOUNT">Account</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {editState.scope !== "GLOBAL" && (
+              <div className="space-y-2">
+                <Label htmlFor="editScopeId">Scope Target ID</Label>
+                <Input
+                  id="editScopeId"
+                  value={editState.scopeId}
+                  onChange={(e) => setEditState((prev) => ({ ...prev, scopeId: e.target.value }))}
+                />
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label>Metric</Label>
+              <Select
+                value={editState.metric}
+                onValueChange={(value) =>
+                  setEditState((prev) => ({ ...prev, metric: value as MetricType }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Metric" />
+                </SelectTrigger>
+                <SelectContent>
+                  {metricDefinitions.map((metric) => (
+                    <SelectItem key={metric.id} value={metric.id}>
+                      {metric.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Operator</Label>
+              <Select
+                value={editState.operator}
+                onValueChange={(value) =>
+                  setEditState((prev) => ({ ...prev, operator: value as PredicateOperator }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Operator" />
+                </SelectTrigger>
+                <SelectContent>
+                  {operatorDefinitions.map((op) => (
+                    <SelectItem key={op.id} value={op.id}>
+                      {op.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editThreshold">Threshold</Label>
+              <Input
+                id="editThreshold"
+                value={editState.value}
+                onChange={(e) => setEditState((prev) => ({ ...prev, value: e.target.value }))}
+              />
+            </div>
+            {editState.metric.startsWith("position.") && (
+              <div className="space-y-2">
+                <Label htmlFor="editInstrument">Instrument CUSIP</Label>
+                <Input
+                  id="editInstrument"
+                  value={editState.instrumentCusip}
+                  onChange={(e) =>
+                    setEditState((prev) => ({ ...prev, instrumentCusip: e.target.value }))
+                  }
+                />
+              </div>
+            )}
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="editExplanation">Explanation Template</Label>
+              <Textarea
+                id="editExplanation"
+                value={editState.explanationTemplate}
+                onChange={(e) =>
+                  setEditState((prev) => ({ ...prev, explanationTemplate: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>Evaluation Points</Label>
+              <div className="flex flex-wrap gap-3">
+                {(["PRE_TRADE", "PRE_EXECUTION", "POST_TRADE"] as EvaluationPoint[]).map((point) => (
+                  <label key={point} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={editState.evaluationPoints.includes(point)}
+                      onCheckedChange={() => toggleEvaluationPoint(point)}
+                    />
+                    {point.replace(/_/g, " ")}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editEffectiveFrom">Effective From</Label>
+              <Input
+                id="editEffectiveFrom"
+                type="datetime-local"
+                value={editState.effectiveFrom}
+                onChange={(e) =>
+                  setEditState((prev) => ({ ...prev, effectiveFrom: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editEffectiveTo">Effective To</Label>
+              <Input
+                id="editEffectiveTo"
+                type="datetime-local"
+                value={editState.effectiveTo}
+                onChange={(e) =>
+                  setEditState((prev) => ({ ...prev, effectiveTo: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateRule}>Save Version</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Description */}
       {rule.description && (

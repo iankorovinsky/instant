@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Plus,
@@ -26,11 +26,13 @@ import {
   useOrderFilters,
 } from "@/components/oms";
 import { useBlotter, useApproveOrder, useCancelOrder, useSendToEMS } from "@/lib/hooks/use-oms";
+import { getHouseholds } from "@/lib/api/pms";
 import type { OrderGroupBy } from "@/lib/oms/types";
 
 export default function OrderBlotterPage() {
   const [groupBy, setGroupBy] = useState<OrderGroupBy>("none");
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
+  const [households, setHouseholds] = useState<Array<{ householdId: string; name: string }>>([]);
 
   const {
     filters,
@@ -48,6 +50,19 @@ export default function OrderBlotterPage() {
   // Fetch orders from API
   const { data: blotterData, isLoading, error } = useBlotter();
   const orders = blotterData?.orders || [];
+
+  useEffect(() => {
+    const loadHouseholds = async () => {
+      try {
+        const response = await getHouseholds();
+        setHouseholds(response.households || []);
+      } catch (err) {
+        console.error("Failed to load households", err);
+        setHouseholds([]);
+      }
+    };
+    loadHouseholds();
+  }, []);
 
   // Mutations
   const approveMutation = useApproveOrder();
@@ -151,6 +166,7 @@ export default function OrderBlotterPage() {
 
           {/* Filters */}
           <OrderFilters
+            households={households}
             filters={filters}
             activeFilterCount={activeFilterCount}
             onToggleState={toggleState}

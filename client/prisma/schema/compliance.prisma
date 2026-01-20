@@ -1,0 +1,147 @@
+// Compliance Models
+
+enum rule_set_status {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum rule_severity {
+  BLOCK
+  WARN
+}
+
+enum rule_scope {
+  GLOBAL
+  HOUSEHOLD
+  ACCOUNT
+}
+
+enum rule_status {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+  DRAFT
+}
+
+enum evaluation_point {
+  PRE_TRADE
+  PRE_EXECUTION
+  POST_TRADE
+}
+
+enum evaluation_result {
+  PASS
+  WARN
+  BLOCK
+}
+
+enum violation_status {
+  ACTIVE
+  RESOLVED
+}
+
+model RuleSet {
+  ruleSetId     String         @id @default(uuid())
+  name          String
+  description   String?
+  version       Int
+  status        rule_set_status
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdAt     DateTime        @default(now())
+  createdBy     String
+  updatedAt     DateTime        @updatedAt
+  updatedBy     String
+
+  rules Rule[]
+
+  @@map("compliance_rule_sets")
+  @@index([status])
+  @@index([effectiveFrom, effectiveTo])
+}
+
+model Rule {
+  ruleId              String       @id @default(uuid())
+  ruleSetId            String?
+  ruleKey             String       @unique
+  name                String
+  description         String?
+  version             Int
+  severity            rule_severity
+  scope               rule_scope
+  scopeId             String?
+  predicate           Json
+  explanationTemplate String
+  evaluationPoints    Json
+  status              rule_status
+  effectiveFrom       DateTime
+  effectiveTo         DateTime?
+  evaluationCount     Int          @default(0)
+  violationCount      Int          @default(0)
+  createdAt           DateTime     @default(now())
+  createdBy           String
+  updatedAt           DateTime     @updatedAt
+  updatedBy           String
+  lastEvaluatedAt     DateTime?
+  lastViolatedAt      DateTime?
+
+  ruleSet RuleSet? @relation(fields: [ruleSetId], references: [ruleSetId], onDelete: SetNull)
+
+  @@map("compliance_rules")
+  @@index([ruleSetId])
+  @@index([ruleKey])
+  @@index([scope, scopeId])
+  @@index([status])
+  @@index([effectiveFrom, effectiveTo])
+}
+
+model ComplianceEvaluation {
+  evaluationId    String             @id @default(uuid())
+  ruleId          String
+  ruleVersion     Int
+  orderId         String?
+  accountId       String?
+  evaluationPoint evaluation_point
+  result          evaluation_result
+  metricValue     Decimal?           @db.Decimal(18, 6)
+  threshold       Decimal?           @db.Decimal(18, 6)
+  metricSnapshot  Json
+  explanation     String
+  evaluatedAt     DateTime
+
+  @@map("compliance_evaluations")
+  @@index([ruleId])
+  @@index([orderId])
+  @@index([accountId])
+  @@index([evaluationPoint])
+  @@index([evaluatedAt])
+}
+
+model ComplianceViolation {
+  violationId     String           @id @default(uuid())
+  ruleId          String
+  ruleName        String
+  ruleVersion     Int
+  severity        rule_severity
+  scope           rule_scope
+  scopeId         String?
+  orderId         String?
+  accountId       String?
+  evaluationPoint evaluation_point
+  metricValue     Decimal?         @db.Decimal(18, 6)
+  threshold       Decimal?         @db.Decimal(18, 6)
+  status          violation_status
+  explanation     String
+  metricSnapshot  Json
+  evaluatedAt     DateTime
+  resolvedAt      DateTime?
+
+  @@map("compliance_violations")
+  @@index([ruleId])
+  @@index([orderId])
+  @@index([accountId])
+  @@index([evaluationPoint])
+  @@index([status])
+  @@index([evaluatedAt])
+}

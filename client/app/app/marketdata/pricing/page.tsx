@@ -38,70 +38,61 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useCurveDates, useMarketGrid } from "@/lib/hooks/use-marketdata";
+import { useMarketDataAsOfDate } from "@/lib/marketdata/use-asof-date";
 import {
-  getInstrumentsWithPricing,
-  getAvailableCurveDates,
   getTypeColor,
   getBucketColor,
   formatDate,
   formatPrice,
   formatYield,
   formatDuration,
-} from "@/lib/marketdata/mock-data";
-import type { InstrumentType, MaturityBucket, InstrumentWithPricing } from "@/lib/marketdata/types";
+} from "@/lib/marketdata/formatters";
+import type { InstrumentType, MaturityBucket } from "@/lib/marketdata/types";
 
 const instrumentTypes: InstrumentType[] = ["bill", "note", "bond", "tips"];
 const maturityBuckets: MaturityBucket[] = ["0-2y", "2-5y", "5-10y", "10-20y", "20y+"];
 
-type SortField = "cusip" | "type" | "maturity" | "coupon" | "price" | "yield" | "duration" | "dv01";
+type SortField =
+  | "cusip"
+  | "name"
+  | "type"
+  | "maturity"
+  | "coupon"
+  | "price"
+  | "yield"
+  | "duration"
+  | "dv01";
 type SortDirection = "asc" | "desc";
 
 export default function MarketGridPage() {
   const router = useRouter();
-  const availableDates = getAvailableCurveDates();
-
-  const [asOfDate, setAsOfDate] = useState<Date>(availableDates[0]);
+  const { data: availableDates = [] } = useCurveDates();
+  const { asOfDate, setAsOfDate } = useMarketDataAsOfDate(availableDates);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTypes, setSelectedTypes] = useState<InstrumentType[]>([]);
   const [selectedBuckets, setSelectedBuckets] = useState<MaturityBucket[]>([]);
   const [sortField, setSortField] = useState<SortField>("yield");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
-  const instruments = useMemo(() => {
-    return getInstrumentsWithPricing(asOfDate);
-  }, [asOfDate]);
-
-  const filteredInstruments = useMemo(() => {
-    return instruments.filter((instrument) => {
-      // Search filter
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        const matchesCusip = instrument.cusip.toLowerCase().includes(query);
-        const matchesName = instrument.name.toLowerCase().includes(query);
-        if (!matchesCusip && !matchesName) return false;
-      }
-
-      // Type filter
-      if (selectedTypes.length > 0 && !selectedTypes.includes(instrument.type)) {
-        return false;
-      }
-
-      // Bucket filter
-      if (selectedBuckets.length > 0 && !selectedBuckets.includes(instrument.maturityBucket)) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [instruments, searchQuery, selectedTypes, selectedBuckets]);
+  const { data: marketGrid, isLoading, error } = useMarketGrid({
+    asOfDate: asOfDate ?? undefined,
+    types: selectedTypes,
+    buckets: selectedBuckets,
+    cusip: searchQuery || undefined,
+  });
 
   const sortedInstruments = useMemo(() => {
-    return [...filteredInstruments].sort((a, b) => {
+    const instruments = marketGrid?.instruments ?? [];
+    return [...instruments].sort((a, b) => {
       let comparison = 0;
 
       switch (sortField) {
         case "cusip":
           comparison = a.cusip.localeCompare(b.cusip);
+          break;
+        case "name":
+          comparison = a.name.localeCompare(b.name);
           break;
         case "type":
           comparison = a.type.localeCompare(b.type);
@@ -128,11 +119,11 @@ export default function MarketGridPage() {
 
       return sortDirection === "asc" ? comparison : -comparison;
     });
-  }, [filteredInstruments, sortField, sortDirection]);
+  }, [marketGrid?.instruments, sortField, sortDirection]);
 
   // Calculate grid statistics
   const gridStats = useMemo(() => {
-    const withPricing = filteredInstruments.filter((i) => i.evaluatedPrice);
+    const withPricing = (marketGrid?.instruments ?? []).filter((i) => i.evaluatedPrice);
     if (withPricing.length === 0) return null;
 
     const yields = withPricing.map((i) => i.evaluatedPrice!.yieldToMaturity);
@@ -147,7 +138,7 @@ export default function MarketGridPage() {
       minYield: Math.min(...yields),
       maxYield: Math.max(...yields),
     };
-  }, [filteredInstruments]);
+  }, [marketGrid?.instruments]);
 
   const toggleType = (type: InstrumentType) => {
     setSelectedTypes((prev) =>
@@ -212,8 +203,9 @@ export default function MarketGridPage() {
             <Calendar className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm">As-of Date:</span>
             <Select
-              value={asOfDate.toISOString()}
+              value={asOfDate?.toISOString() ?? ""}
               onValueChange={(value) => setAsOfDate(new Date(value))}
+              disabled={!asOfDate}
             >
               <SelectTrigger className="w-[140px]">
                 <SelectValue />
@@ -286,6 +278,20 @@ export default function MarketGridPage() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {marketGrid?.curveSource && asOfDate && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground">
+              <span>
+                All prices/yields evaluated as-of <span className="text-foreground">{formatDate(asOfDate)}</span>
+              </span>
+              <span>Source: {marketGrid.curveSource.sourceUrl || "FRED"}</span>
+              <span>Ingested: {formatDate(marketGrid.curveSource.ingestedAt)}</span>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Filters */}
@@ -368,110 +374,149 @@ export default function MarketGridPage() {
       </Card>
 
       {/* Results Summary */}
-      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-        <Grid3X3 className="h-4 w-4" />
-        <span>
-          Showing {sortedInstruments.length} securities with pricing
-        </span>
-        <span>•</span>
-        <span>
-          Sorted by {sortField} ({sortDirection === "asc" ? "ascending" : "descending"})
-        </span>
-      </div>
+      {!error && (
+        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <Grid3X3 className="h-4 w-4" />
+          <span>
+            Showing {sortedInstruments.length} securities with pricing
+          </span>
+          <span>•</span>
+          <span>
+            Sorted by {sortField} ({sortDirection === "asc" ? "ascending" : "descending"})
+          </span>
+        </div>
+      )}
 
       {/* Pricing Grid */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>
-                    <SortButton field="cusip">CUSIP</SortButton>
-                  </TableHead>
-                  <TableHead>
-                    <SortButton field="type">Type</SortButton>
-                  </TableHead>
-                  <TableHead>
-                    <SortButton field="maturity">Maturity</SortButton>
-                  </TableHead>
-                  <TableHead className="text-right">
-                    <SortButton field="coupon">Coupon</SortButton>
-                  </TableHead>
-                  <TableHead className="text-right">
-                    <SortButton field="price">Clean Price</SortButton>
-                  </TableHead>
-                  <TableHead className="text-right">Dirty Price</TableHead>
-                  <TableHead className="text-right">Accrued</TableHead>
-                  <TableHead className="text-right">
-                    <SortButton field="yield">YTM</SortButton>
-                  </TableHead>
-                  <TableHead className="text-right">
-                    <SortButton field="duration">Duration</SortButton>
-                  </TableHead>
-                  <TableHead className="text-right">
-                    <SortButton field="dv01">DV01</SortButton>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedInstruments.map((instrument) => (
-                  <TableRow
-                    key={instrument.cusip}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => router.push(`/app/marketdata/instruments/${instrument.cusip}`)}
-                  >
-                    <TableCell className="font-mono text-sm">
-                      {instrument.cusip}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getTypeColor(instrument.type)}>
-                        {instrument.type.toUpperCase()}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{formatDate(instrument.maturityDate)}</TableCell>
-                    <TableCell className="text-right font-mono">
-                      {instrument.coupon > 0 ? `${instrument.coupon}%` : "-"}
-                    </TableCell>
-                    <TableCell className="text-right font-mono font-medium">
-                      {instrument.evaluatedPrice
-                        ? formatPrice(instrument.evaluatedPrice.cleanPrice)
-                        : "-"}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-muted-foreground">
-                      {instrument.evaluatedPrice
-                        ? formatPrice(instrument.evaluatedPrice.dirtyPrice)
-                        : "-"}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-muted-foreground">
-                      {instrument.evaluatedPrice
-                        ? formatPrice(instrument.evaluatedPrice.accruedInterest)
-                        : "-"}
-                    </TableCell>
-                    <TableCell className="text-right font-mono font-medium">
-                      {instrument.evaluatedPrice
-                        ? formatYield(instrument.evaluatedPrice.yieldToMaturity)
-                        : "-"}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {instrument.evaluatedPrice
-                        ? formatDuration(instrument.evaluatedPrice.modifiedDuration)
-                        : "-"}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {instrument.evaluatedPrice
-                        ? `$${instrument.evaluatedPrice.dv01.toFixed(4)}`
-                        : "-"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      {error && (
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center text-muted-foreground">
+              <Grid3X3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium">Unable to load market grid</p>
+              <p className="text-sm">Try again in a moment.</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-      {sortedInstruments.length === 0 && (
+      {isLoading && !error && (
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center text-muted-foreground">
+              <Grid3X3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium">Loading evaluated pricing...</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!isLoading && !error && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>
+                      <SortButton field="cusip">CUSIP</SortButton>
+                    </TableHead>
+                    <TableHead>
+                      <SortButton field="name">Name</SortButton>
+                    </TableHead>
+                    <TableHead>
+                      <SortButton field="type">Type</SortButton>
+                    </TableHead>
+                    <TableHead>
+                      <SortButton field="maturity">Maturity</SortButton>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <SortButton field="coupon">Coupon</SortButton>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <SortButton field="price">Evaluated Clean Price</SortButton>
+                    </TableHead>
+                    <TableHead className="text-right">Evaluated Dirty Price</TableHead>
+                    <TableHead className="text-right">Accrued Interest</TableHead>
+                    <TableHead className="text-right">
+                      <SortButton field="yield">Evaluated Yield</SortButton>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <SortButton field="duration">Modified Duration</SortButton>
+                    </TableHead>
+                    <TableHead>Bucket</TableHead>
+                    <TableHead className="text-right">
+                      <SortButton field="dv01">DV01</SortButton>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sortedInstruments.map((instrument) => (
+                    <TableRow
+                      key={instrument.cusip}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => router.push(`/app/marketdata/instruments/${instrument.cusip}`)}
+                    >
+                      <TableCell className="font-mono text-sm">
+                        {instrument.cusip}
+                      </TableCell>
+                      <TableCell className="max-w-[220px] truncate">
+                        {instrument.name}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getTypeColor(instrument.type)}>
+                          {instrument.type.toUpperCase()}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{formatDate(instrument.maturityDate)}</TableCell>
+                      <TableCell className="text-right font-mono">
+                        {instrument.coupon > 0 ? `${instrument.coupon}%` : "-"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-medium">
+                        {instrument.evaluatedPrice
+                          ? formatPrice(instrument.evaluatedPrice.cleanPrice)
+                          : "-"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">
+                        {instrument.evaluatedPrice
+                          ? formatPrice(instrument.evaluatedPrice.dirtyPrice)
+                          : "-"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">
+                        {instrument.evaluatedPrice
+                          ? formatPrice(instrument.evaluatedPrice.accruedInterest)
+                          : "-"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-medium">
+                        {instrument.evaluatedPrice
+                          ? formatYield(instrument.evaluatedPrice.yieldToMaturity)
+                          : "-"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {instrument.evaluatedPrice
+                          ? formatDuration(instrument.evaluatedPrice.modifiedDuration)
+                          : "-"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getBucketColor(instrument.maturityBucket)} variant="outline">
+                          {instrument.maturityBucket}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {instrument.evaluatedPrice
+                          ? `$${instrument.evaluatedPrice.dv01.toFixed(4)}`
+                          : "-"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!isLoading && !error && sortedInstruments.length === 0 && (
         <Card>
           <CardContent className="py-12">
             <div className="text-center text-muted-foreground">

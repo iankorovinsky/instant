@@ -42,16 +42,39 @@ node run.js
 
 ## Navigation
 
-- **Arrow keys** or **Mouse** - Navigate sidebar and switch service views
+- **Arrow keys** (`↑`/`↓`) or **Mouse** - Navigate sidebar and switch service views
+- **`Tab`** - Switch focus between sidebar and log view (for scrolling)
 - **`q`** or **`Ctrl+C`** - Stop all services and exit
+
+## Scrolling Logs
+
+When focused on a log view (press `Tab` to focus):
+- **`↑`/`↓`** or **`j`/`k`** - Scroll one line up/down
+- **Page Up**/ **Page Down** or **`Ctrl+B`**/ **`Ctrl+F`** - Scroll one page up/down
+- **`Home`** or **`g`** - Jump to top of logs
+- **`End`** or **`G`** - Jump to bottom of logs
+- **Mouse wheel** - Scroll logs (when mouse is over log view)
 
 ## Services Started
 
 1. **Temporal Server** - `temporal server start-dev` (port 7233, UI on 8088)
-2. **Temporal Worker** - `go run services/temporal/worker/main.go`
-3. **Go API** - `go run services/api/main.go` (port 8080)
-4. **Python Agent** - `uv run fastapi dev` (port 8000)
-5. **Next.js Client** - `bunx next dev` (port 3000)
+2. **Temporal Worker** - `air` or `go run main.go` (hot reload if air installed)
+3. **Go API** - `air` or `go run main.go` (port 8080, hot reload if air installed)
+4. **Python Agent** - `uv run fastapi dev` (port 8000, hot reload)
+5. **Next.js Client** - `bunx next dev` (port 3000, hot reload)
+
+## Hot Reload
+
+- **Next.js Client** - Hot reload enabled by default
+- **Python Agent** - Hot reload enabled via FastAPI dev mode
+- **Go API & Temporal Worker** - Hot reload enabled if `air` is installed
+
+To install `air` for Go hot reload:
+```bash
+go install github.com/air-verse/air@latest
+```
+
+The TUI will automatically detect if `air` is available and use it for Go services. If not installed, it falls back to `go run` (manual restart required).
 
 ## Logs
 

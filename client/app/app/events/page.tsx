@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   Clock,
@@ -29,13 +30,14 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
-  getTimelineEvents,
-  getEventStatistics,
+  buildEventStatistics,
+  formatRelativeTime,
+  getAggregateColor,
   getModuleColor,
   getModuleLabel,
-  getAggregateColor,
-  formatRelativeTime,
-} from "@/lib/events/mock-data";
+} from "@/lib/events/ui";
+import { fetchEventTimeline } from "@/lib/events/api";
+import type { EventTimelineItem } from "@/lib/events/types";
 import type { EventModule } from "@/lib/events/types";
 
 const moduleIcons: Record<EventModule, React.ReactNode> = {
@@ -50,8 +52,42 @@ const moduleIcons: Record<EventModule, React.ReactNode> = {
 
 export default function EventStudioDashboardPage() {
   const router = useRouter();
-  const stats = getEventStatistics();
-  const recentEvents = getTimelineEvents().slice(0, 10);
+  const [events, setEvents] = useState<EventTimelineItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const loadEvents = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchEventTimeline();
+        if (!active) return;
+        setEvents(data);
+        setError(null);
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Failed to load events");
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    loadEvents();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const stats = useMemo(() => buildEventStatistics(events), [events]);
+  const recentEvents = events.slice(0, 10);
+
+  if (loading) {
+    return <div className="text-sm text-muted-foreground">Loading events…</div>;
+  }
+
+  if (error) {
+    return <div className="text-sm text-red-600">{error}</div>;
+  }
 
   return (
     <div className="space-y-6">

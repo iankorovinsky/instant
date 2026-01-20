@@ -16,7 +16,7 @@ import {
   formatDate,
   formatPrice,
   formatBasisPoints,
-} from "@/lib/ems/mock-data";
+} from "@/lib/ems/ui";
 import type { Execution } from "@/lib/ems/types";
 
 interface ExecutionRowProps {

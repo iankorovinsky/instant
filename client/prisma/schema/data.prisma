@@ -50,8 +50,10 @@ model Instrument {
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  executions Execution[]
 
   orders Order[]
+  positions Position[]
 
   @@map("instruments")
 }

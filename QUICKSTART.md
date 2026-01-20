@@ -104,7 +104,22 @@ Agent will start on port 8000.
 
 ## Testing the Integration
 
-### 1. Check API Health
+### Automated Test (Recommended)
+
+```bash
+make test
+```
+
+This will:
+1. Seed test data (accounts, instruments)
+2. Create orders via API
+3. Verify projection worker processed events
+4. Query blotter and events
+5. Test bulk operations
+
+### Manual Testing
+
+#### 1. Check API Health
 
 ```bash
 curl http://localhost:8080/health
