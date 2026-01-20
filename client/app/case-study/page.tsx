@@ -367,11 +367,7 @@ export default function CaseStudyPage() {
                 Product
               </h3>
               <p className="text-[#7c7c7c] leading-relaxed">
-                From the code paths, a likely flow is: OMS creates orders,
-                compliance evaluates pre-trade rules, and approved orders are
-                sent to EMS for deterministic execution simulation. PMS and
-                compliance projections then reflect holdings, execution results,
-                and audit traces across the UI.
+                Since there wasn't much information available online about the flow of the product, I inferred it to the best of my abilities to reconstruct the system!
               </p>
             </div>
 
