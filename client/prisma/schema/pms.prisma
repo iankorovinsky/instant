@@ -35,11 +35,32 @@ model Account {
   targets   PortfolioTarget[]
   proposals Proposal[]
   orders    Order[]
+  executions Execution[]
+  positions Position[]
 
   @@map("accounts")
   @@index([householdId])
   @@index([modelId])
   @@index([createdAt])
+}
+
+model Position {
+  accountId    String
+  instrumentId String
+  quantity     Decimal  @db.Decimal(18, 6)
+  avgCost      Decimal  @db.Decimal(18, 6)
+  marketValue  Decimal  @db.Decimal(18, 6)
+  duration     Decimal  @db.Decimal(12, 6)
+  dv01         Decimal  @db.Decimal(18, 6)
+  updatedAt    DateTime @updatedAt
+
+  account    Account    @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  instrument Instrument @relation(fields: [instrumentId], references: [cusip], onDelete: Restrict)
+
+  @@id([accountId, instrumentId])
+  @@map("positions")
+  @@index([accountId])
+  @@index([instrumentId])
 }
 
 model PortfolioModel {
