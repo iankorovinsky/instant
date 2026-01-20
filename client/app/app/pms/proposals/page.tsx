@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatDate, formatCurrency } from "@/lib/pms/mock-data";
+import { formatDate, formatCurrency } from "@/lib/pms/ui";
 import { getAccounts, getHouseholds, getProposals } from "@/lib/api/pms";
 import type { ProposalTrade } from "@/lib/pms/types";
 

@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -28,24 +27,16 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { accounts, households } from "@/lib/pms/mock-data";
-import { instruments, formatOrderQuantity, formatPrice } from "@/lib/oms/mock-data";
+import { getAccounts } from "@/lib/api/pms";
+import { fetchInstruments } from "@/lib/marketdata/api";
+import { useBulkCreateOrders } from "@/lib/hooks/use-oms";
+import { formatOrderQuantity, formatPrice } from "@/lib/oms/ui";
 import type { BulkOrderRow, BulkOrderValidationResult } from "@/lib/oms/types";
-
-// Sample CSV data for preview
-const sampleOrders: BulkOrderRow[] = [
-  { accountId: "acc-001", cusip: "912828ZT", side: "BUY", quantity: 50000, orderType: "MARKET", timeInForce: "DAY" },
-  { accountId: "acc-002", cusip: "38376HRK", side: "SELL", quantity: 25000, orderType: "LIMIT", limitPrice: 98.50, timeInForce: "DAY" },
-  { accountId: "acc-003", cusip: "46625HRL", side: "BUY", quantity: 75000, orderType: "CURVE_RELATIVE", curveSpreadBp: 125, timeInForce: "DAY" },
-  { accountId: "acc-005", cusip: "06051GHF", side: "BUY", quantity: 100000, orderType: "MARKET", timeInForce: "DAY" },
-  { accountId: "acc-007", cusip: "912828YV", side: "SELL", quantity: 60000, orderType: "LIMIT", limitPrice: 97.25, timeInForce: "IOC" },
-];
+import type { InstrumentWithPricing } from "@/lib/marketdata/types";
 
 type UploadStep = "upload" | "preview" | "processing" | "complete";
 
 export default function BulkUploadPage() {
-  const router = useRouter();
-
   const [step, setStep] = useState<UploadStep>("upload");
   const [isDragging, setIsDragging] = useState(false);
   const [fileName, setFileName] = useState<string>("");
@@ -53,21 +44,103 @@ export default function BulkUploadPage() {
   const [submitOption, setSubmitOption] = useState<"draft" | "approval">("draft");
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState<{ success: number; errors: number }>({ success: 0, errors: 0 });
+  const [accounts, setAccounts] = useState<
+    Array<{ accountId: string; householdId: string; name: string; householdName?: string }>
+  >([]);
+  const [instruments, setInstruments] = useState<InstrumentWithPricing[]>([]);
+
+  const bulkCreate = useBulkCreateOrders();
+
+  useEffect(() => {
+    let active = true;
+    const loadData = async () => {
+      try {
+        const [accountsResponse, instrumentsResponse] = await Promise.all([
+          getAccounts(),
+          fetchInstruments({ limit: 500 }),
+        ]);
+        if (!active) return;
+        setAccounts(accountsResponse.accounts || []);
+        setInstruments(instrumentsResponse.instruments || []);
+      } catch (err) {
+        console.error("Failed to load bulk upload reference data", err);
+        if (!active) return;
+        setAccounts([]);
+        setInstruments([]);
+      }
+    };
+    loadData();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const parseNumber = (value: string | undefined): number | undefined => {
+    if (!value) return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
+  const parseCsvText = (text: string): BulkOrderRow[] => {
+    const lines = text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (lines.length < 2) return [];
+
+    const headers = lines[0].split(",").map((header) => header.trim());
+    return lines.slice(1).map((line) => {
+      const values = line.split(",").map((value) => value.trim());
+      const row: Record<string, string> = {};
+      headers.forEach((header, idx) => {
+        row[header] = values[idx] ?? "";
+      });
+
+      const side = (row.side || "").toUpperCase();
+      const orderType = (row.orderType || "MARKET").toUpperCase();
+      const timeInForce = (row.timeInForce || "DAY").toUpperCase();
+
+      return {
+        accountId: row.accountId || row.account || "",
+        cusip: row.cusip || row.instrumentId || "",
+        side: (side === "SELL" ? "SELL" : "BUY"),
+        quantity: Number(row.quantity ?? 0),
+        orderType: orderType === "LIMIT"
+          ? "LIMIT"
+          : orderType === "CURVE_RELATIVE"
+          ? "CURVE_RELATIVE"
+          : "MARKET",
+        limitPrice: parseNumber(row.limitPrice),
+        curveSpreadBp: parseNumber(row.curveSpreadBp),
+        timeInForce: timeInForce === "IOC" ? "IOC" : "DAY",
+        notes: row.notes || undefined,
+      };
+    });
+  };
 
   // Validate a parsed order
   const validateOrder = (row: BulkOrderRow, index: number): BulkOrderValidationResult => {
     const errors: string[] = [];
 
     // Validate account
-    const account = accounts.find((a) => a.accountId === row.accountId);
-    if (!account) {
-      errors.push("Account not found");
+    if (!row.accountId) {
+      errors.push("Account ID required");
+    } else {
+      const account = accounts.find((a) => a.accountId === row.accountId);
+      if (!account) {
+        errors.push("Account not found");
+      }
     }
 
     // Validate instrument
-    const instrument = instruments.find((i) => i.cusip === row.cusip);
-    if (!instrument) {
-      errors.push("Instrument not found");
+    if (!row.cusip) {
+      errors.push("CUSIP required");
+    } else {
+      const instrument = instruments.find((i) => i.cusip === row.cusip);
+      if (!instrument) {
+        errors.push("Instrument not found");
+      }
     }
 
     // Validate quantity
@@ -112,55 +185,74 @@ export default function BulkUploadPage() {
 
     const file = e.dataTransfer.files[0];
     if (file && file.name.endsWith(".csv")) {
-      processFile(file);
+      void processFile(file);
     }
   }, []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      processFile(file);
+      void processFile(file);
     }
   };
 
-  const processFile = (file: File) => {
+  const processFile = async (file: File) => {
     setFileName(file.name);
-    // In a real app, parse the CSV here
-    // For demo, use sample data
-    const validated = sampleOrders.map((order, idx) => validateOrder(order, idx));
-    setParsedOrders(validated);
-    setStep("preview");
+    try {
+      const contents = await file.text();
+      const rows = parseCsvText(contents);
+      const validated = rows.map((order, idx) => validateOrder(order, idx));
+      setParsedOrders(validated);
+      setStep("preview");
+    } catch (err) {
+      console.error("Failed to parse CSV", err);
+      setParsedOrders([]);
+      setStep("preview");
+    }
   };
 
-  const handleUseSampleData = () => {
-    setFileName("sample_orders.csv");
-    const validated = sampleOrders.map((order, idx) => validateOrder(order, idx));
-    setParsedOrders(validated);
-    setStep("preview");
-  };
-
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setStep("processing");
-    setProgress(0);
+    setProgress(10);
 
-    // Simulate processing
     const validOrders = parsedOrders.filter((o) => o.isValid);
     const invalidOrders = parsedOrders.filter((o) => !o.isValid);
 
-    let current = 0;
-    const interval = setInterval(() => {
-      current += 10;
-      setProgress(current);
+    try {
+      setProgress(40);
+      const response = await bulkCreate.mutateAsync({
+        orders: validOrders.map((order) => ({
+          accountId: order.data.accountId || "",
+          instrumentId: order.data.cusip,
+          side: order.data.side,
+          quantity: order.data.quantity,
+          orderType: order.data.orderType,
+          limitPrice: order.data.limitPrice,
+          curveSpreadBp: order.data.curveSpreadBp,
+          timeInForce: order.data.timeInForce || "DAY",
+          createdBy: "advisor@instant.com",
+        })),
+        createdBy: "advisor@instant.com",
+      });
 
-      if (current >= 100) {
-        clearInterval(interval);
-        setResults({
-          success: validOrders.length,
-          errors: invalidOrders.length,
-        });
-        setStep("complete");
-      }
-    }, 200);
+      const success = response.results.filter((result) => result.status === "created").length;
+      const failed = response.results.length - success;
+
+      setProgress(100);
+      setResults({
+        success,
+        errors: failed + invalidOrders.length,
+      });
+      setStep("complete");
+    } catch (err) {
+      console.error("Failed to submit bulk orders", err);
+      setProgress(100);
+      setResults({
+        success: 0,
+        errors: validOrders.length + invalidOrders.length,
+      });
+      setStep("complete");
+    }
   };
 
   const validCount = parsedOrders.filter((o) => o.isValid).length;
@@ -222,11 +314,6 @@ export default function BulkUploadPage() {
                 </label>
               </div>
 
-              <div className="mt-4 flex justify-center">
-                <Button variant="link" onClick={handleUseSampleData}>
-                  Use sample data for demo
-                </Button>
-              </div>
             </CardContent>
           </Card>
 
@@ -368,7 +455,7 @@ export default function BulkUploadPage() {
                             <p className="font-mono text-sm">{result.data.cusip}</p>
                             {instrument && (
                               <p className="text-xs text-muted-foreground truncate max-w-32">
-                                {instrument.description}
+                                {instrument.name}
                               </p>
                             )}
                           </div>

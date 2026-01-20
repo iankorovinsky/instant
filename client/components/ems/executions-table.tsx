@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { ScrollableTable } from "@/components/ui/scrollable-table";
 import { ExecutionRow } from "./execution-row";
-import { formatDate } from "@/lib/ems/mock-data";
+import { formatDate } from "@/lib/ems/ui";
 import type { Execution, ExecutionGroupBy } from "@/lib/ems/types";
 
 interface ExecutionsTableProps {

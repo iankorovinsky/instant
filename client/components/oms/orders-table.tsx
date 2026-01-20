@@ -13,9 +13,9 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollableTable } from "@/components/ui/scrollable-table";
 import { OrderRow } from "./order-row";
-import { getStateColor } from "@/lib/oms/mock-data";
-import { accounts, households } from "@/lib/pms/mock-data";
-import type { Order, OrderState, OrderGroupBy } from "@/lib/oms/types";
+import { getStateColor } from "@/lib/oms/ui";
+import type { Order, OrderState } from "@/lib/api/oms";
+import type { OrderGroupBy } from "@/lib/oms/types";
 
 interface OrdersTableProps {
   orders: Order[];
@@ -47,14 +47,9 @@ export function OrdersTable({
     orders.forEach((order) => {
       let key = "";
       if (groupBy === "household") {
-        const account = accounts.find((a) => a.accountId === order.accountId);
-        const household = account
-          ? households.find((h) => h.householdId === account.householdId)
-          : null;
-        key = household?.name || "Unknown";
+        key = order.householdId || "Unknown";
       } else if (groupBy === "account") {
-        const account = accounts.find((a) => a.accountId === order.accountId);
-        key = account?.name || "Unknown";
+        key = order.accountName || order.accountId || "Unknown";
       } else if (groupBy === "state") {
         key = order.state;
       }

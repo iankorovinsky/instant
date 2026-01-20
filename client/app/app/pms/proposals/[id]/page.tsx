@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { formatDate, formatCurrency } from "@/lib/pms/mock-data";
+import { formatDate, formatCurrency } from "@/lib/pms/ui";
 import {
   approveProposal,
   getAccountView,
@@ -341,8 +341,6 @@ export default function ProposalDetailPage({
                   bucket as keyof typeof proposal.predictedAnalytics.bucketWeights
                 ] as number;
               const change = predicted - current;
-              const targetWeight = target?.bucketWeights[bucket as keyof typeof target.bucketWeights] as number | undefined;
-
               return (
                 <div key={bucket} className="flex-1">
                   <div className="text-center mb-2">
@@ -356,9 +354,6 @@ export default function ProposalDetailPage({
                       {change > 0 ? "+" : ""}
                       {change}%
                     </div>
-                    {targetWeight !== undefined && (
-                      <div className="text-xs text-muted-foreground">Target: {targetWeight}%</div>
-                    )}
                   </div>
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
                     <div

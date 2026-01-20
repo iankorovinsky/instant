@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { portfolioModels, formatCurrency, formatDate } from "@/lib/pms/mock-data";
+import { formatCurrency, formatDate } from "@/lib/pms/ui";
 import { getAccountView, getHouseholdView } from "@/lib/api/pms";
 
 export default function AccountDetailPage({
@@ -49,9 +49,7 @@ export default function AccountDetailPage({
   const account = accountView?.account;
   const positions = accountView?.positions || [];
   const analytics = accountView?.analytics;
-  const model = account?.modelId
-    ? portfolioModels.find((m) => m.modelId === account.modelId)
-    : null;
+  const modelId = account?.modelId;
 
   if (!account && !isLoading) {
     return (
@@ -119,19 +117,14 @@ export default function AccountDetailPage({
             <CardTitle className="text-base">Assigned Model</CardTitle>
           </CardHeader>
           <CardContent>
-            {model ? (
-              <Link
-                href={`/app/pms/models/${model.modelId}`}
-                className="flex items-center gap-3 hover:text-primary"
-              >
-                <LayoutGrid className="h-5 w-5 text-muted-foreground" />
+            {modelId ? (
+              <div className="flex items-center gap-3 text-muted-foreground">
+                <LayoutGrid className="h-5 w-5" />
                 <div>
-                  <span className="font-medium">{model.name}</span>
-                  <p className="text-xs text-muted-foreground">
-                    Target: {model.durationTarget}y duration
-                  </p>
+                  <span className="font-medium text-foreground">Model {modelId}</span>
+                  <p className="text-xs text-muted-foreground">Model details are not available yet</p>
                 </div>
-              </Link>
+              </div>
             ) : (
               <div className="flex items-center gap-3 text-muted-foreground">
                 <LayoutGrid className="h-5 w-5" />
@@ -170,11 +163,7 @@ export default function AccountDetailPage({
             <div className="text-2xl font-bold">
               {analytics ? `${analytics.totalDuration.toFixed(2)} years` : "--"}
             </div>
-            {model && (
-              <p className="text-xs text-muted-foreground">
-                Target: {model.durationTarget}y
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground">Weighted average</p>
           </CardContent>
         </Card>
 
@@ -207,22 +196,17 @@ export default function AccountDetailPage({
           <CardTitle>Maturity Bucket Allocation</CardTitle>
           <CardDescription>
             Distribution of portfolio across maturity buckets
-            {model && " vs. model targets"}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex gap-2">
             {analytics &&
               Object.entries(analytics.bucketWeights).map(([bucket, weight]) => {
-              const targetWeight = model?.bucketWeights[bucket as keyof typeof model.bucketWeights];
               return (
                 <div key={bucket} className="flex-1">
                   <div className="text-center mb-2">
                     <div className="text-sm font-medium">{bucket}</div>
                     <div className="text-2xl font-bold">{weight}%</div>
-                    {model && targetWeight !== undefined && (
-                      <div className="text-xs text-muted-foreground">Target: {targetWeight}%</div>
-                    )}
                   </div>
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
                     <div

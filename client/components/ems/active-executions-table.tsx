@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ScrollableTable } from "@/components/ui/scrollable-table";
-import { getStateColor } from "@/lib/ems/mock-data";
+import { getStateColor } from "@/lib/ems/ui";
 import type { Execution } from "@/lib/ems/types";
 
 interface ActiveExecutionsTableProps {

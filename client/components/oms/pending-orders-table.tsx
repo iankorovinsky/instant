@@ -14,8 +14,8 @@ import { ScrollableTable } from "@/components/ui/scrollable-table";
 import {
   getComplianceColor,
   formatOrderQuantity,
-} from "@/lib/oms/mock-data";
-import type { Order } from "@/lib/oms/types";
+} from "@/lib/oms/ui";
+import type { Order } from "@/lib/api/oms";
 
 interface PendingOrdersTableProps {
   orders: Order[];
@@ -59,9 +59,11 @@ export function PendingOrdersTable({
             >
               <TableCell>
                 <div>
-                  <p className="font-medium font-mono text-sm">{order.cusip}</p>
+                  <p className="font-medium font-mono text-sm">
+                    {order.cusip || order.instrumentId}
+                  </p>
                   <p className="text-xs text-muted-foreground truncate max-w-32">
-                    {order.instrumentDescription}
+                    {order.instrumentName || order.instrumentId}
                   </p>
                 </div>
               </TableCell>

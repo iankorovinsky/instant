@@ -8,7 +8,6 @@ import {
   BarChart3,
   Grid3X3,
   ArrowRight,
-  Calendar,
   DollarSign,
   Clock,
 } from "lucide-react";
@@ -53,11 +52,6 @@ export default function MarketDataDashboardPage() {
           <p className="text-muted-foreground mt-1">
             Instrument master data, yield curves, and evaluated pricing
           </p>
-        </div>
-        <div className="flex items-center gap-2 bg-muted/50 px-4 py-2 rounded-lg">
-          <Calendar className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">Pricing as-of:</span>
-          <span className="font-medium">{summary?.latestCurveDate ? formatDate(summary.latestCurveDate) : "N/A"}</span>
         </div>
       </div>
 

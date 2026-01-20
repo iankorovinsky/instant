@@ -72,6 +72,11 @@ type RunOptimizationRequest struct {
 	RequestedBy    string            `json:"requestedBy"`
 }
 
+type CreateHouseholdRequest struct {
+	Name      string `json:"name"`
+	CreatedBy string `json:"createdBy"`
+}
+
 type ApproveProposalRequest struct {
 	ProposalID string `json:"proposalId"`
 	ApprovedBy string `json:"approvedBy"`

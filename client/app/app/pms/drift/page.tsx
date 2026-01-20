@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { portfolioModels, getDriftStatus, formatDate, formatPercent } from "@/lib/pms/mock-data";
+import { getDriftStatus, formatDate, formatPercent } from "@/lib/pms/ui";
 import { getAccounts, getDrift, getHouseholds } from "@/lib/api/pms";
 
 type DriftFilter = "all" | "in_tolerance" | "warning" | "out_of_tolerance";
@@ -70,16 +70,14 @@ export default function DriftDashboardPage() {
     const household = account
       ? households.find((h) => h.householdId === account.householdId)
       : null;
-    const model = account?.modelId
-      ? portfolioModels.find((m) => m.modelId === account.modelId)
-      : null;
+    const modelId = account?.modelId;
     const status = getDriftStatus(drift.overallDrift);
 
     return {
       ...drift,
       account,
       household,
-      model,
+      modelId,
       status,
     };
   });
@@ -273,7 +271,7 @@ export default function DriftDashboardPage() {
                     </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {drift.model?.name || "No model"}
+                    {drift.modelId || "No model"}
                   </TableCell>
                   <TableCell className="text-right font-medium">
                     {drift.currentDuration.toFixed(2)}y

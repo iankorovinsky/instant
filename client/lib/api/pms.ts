@@ -122,6 +122,17 @@ export interface HouseholdView {
   asOfDate: string;
 }
 
+export interface CreateHouseholdRequest {
+  name: string;
+  createdBy: string;
+}
+
+export interface CreateHouseholdResponse {
+  householdId: string;
+  correlationId: string;
+  status: string;
+}
+
 export interface AccountsResponse {
   accounts: Array<{
     accountId: string;
@@ -214,6 +225,21 @@ export async function runOptimization(request: RunOptimizationRequest) {
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error || "Failed to run optimization");
+  }
+
+  return response.json();
+}
+
+export async function createHousehold(request: CreateHouseholdRequest): Promise<CreateHouseholdResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/pms/households`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to create household");
   }
 
   return response.json();

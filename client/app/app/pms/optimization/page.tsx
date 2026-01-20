@@ -10,7 +10,6 @@ import {
   Briefcase,
   Settings2,
   Play,
-  LayoutGrid,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { portfolioModels, formatCurrency } from "@/lib/pms/mock-data";
+import { formatCurrency } from "@/lib/pms/ui";
 import {
   getAccountView,
   getAccounts,
@@ -45,7 +44,6 @@ export default function OptimizationPage() {
   const [scope, setScope] = useState<OptimizationScope>("account");
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
   const [selectedHouseholdId, setSelectedHouseholdId] = useState<string>("");
-  const [selectedModelId, setSelectedModelId] = useState<string>("");
   const [durationTarget, setDurationTarget] = useState<number>(5);
   const [useCustomWeights, setUseCustomWeights] = useState(false);
   const [bucketWeights, setBucketWeights] = useState<BucketWeights>({
@@ -66,7 +64,6 @@ export default function OptimizationPage() {
 
   const selectedAccount = accounts.find((a) => a.accountId === selectedAccountId);
   const selectedHousehold = households.find((h) => h.householdId === selectedHouseholdId);
-  const selectedModel = portfolioModels.find((m) => m.modelId === selectedModelId);
 
   useEffect(() => {
     const loadLists = async () => {
@@ -113,20 +110,6 @@ export default function OptimizationPage() {
     loadAnalytics();
   }, [scope, selectedAccountId, selectedHouseholdId]);
 
-  const handleModelSelect = (modelId: string) => {
-    setSelectedModelId(modelId);
-    const model = portfolioModels.find((m) => m.modelId === modelId);
-    if (model) {
-      setDurationTarget(model.durationTarget);
-      setBucketWeights({ ...model.bucketWeights });
-      if (model.constraints?.maxPositionSize) {
-        setMaxPositionSize(model.constraints.maxPositionSize);
-      }
-      if (model.constraints?.maxTurnover) {
-        setMaxTurnover(model.constraints.maxTurnover);
-      }
-    }
-  };
 
   const handleBucketWeightChange = (bucket: keyof BucketWeights, value: number) => {
     const newWeights = { ...bucketWeights, [bucket]: value };
@@ -154,7 +137,6 @@ export default function OptimizationPage() {
       const response = await runOptimization({
         scope,
         scopeId: scope === "account" ? selectedAccountId : selectedHouseholdId,
-        modelId: selectedModelId || undefined,
         durationTarget,
         bucketWeights,
         constraints: {
@@ -305,34 +287,10 @@ export default function OptimizationPage() {
             <CardHeader>
               <CardTitle>Target Configuration</CardTitle>
               <CardDescription>
-                Use a portfolio model or configure custom targets
+                Configure optimization targets
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label>Portfolio Model (Optional)</Label>
-                <Select value={selectedModelId} onValueChange={handleModelSelect}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a model or configure manually..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {portfolioModels.map((model) => (
-                      <SelectItem key={model.modelId} value={model.modelId}>
-                        <div className="flex items-center gap-2">
-                          <LayoutGrid className="h-4 w-4" />
-                          <span>{model.name}</span>
-                          <span className="text-muted-foreground">
-                            ({model.durationTarget}y duration)
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Separator />
-
               <div className="space-y-4">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -357,7 +315,7 @@ export default function OptimizationPage() {
                   <Label htmlFor="customWeights">Customize bucket weights</Label>
                 </div>
 
-                {(useCustomWeights || selectedModelId) && (
+                {useCustomWeights && (
                   <div className="space-y-4 pl-6">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm">Target Bucket Weights</Label>
@@ -533,7 +491,7 @@ export default function OptimizationPage() {
                           <span className="text-sm">{bucket}</span>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">{weight}%</span>
-                            {useCustomWeights || selectedModelId ? (
+                            {useCustomWeights ? (
                               <span
                                 className={`text-xs ${
                                   Math.abs(diff) > 5
@@ -563,22 +521,6 @@ export default function OptimizationPage() {
             </Card>
           )}
 
-          {selectedModel && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Using Model</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-3">
-                  <LayoutGrid className="h-5 w-5 text-primary" />
-                  <div>
-                    <p className="font-medium">{selectedModel.name}</p>
-                    <p className="text-xs text-muted-foreground">{selectedModel.description}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
       </div>
     </div>

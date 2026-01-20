@@ -111,8 +111,8 @@ class CohereProvider(LLMProvider):
         if not self.api_key:
             raise ValueError("COHERE_API_KEY environment variable is required")
         self.base_url = "https://api.cohere.ai/v1"
-        # Using command-r-plus for best reasoning capabilities
-        self.model = "command-r-plus"
+        # Using command-a-03-2025 for supported reasoning capabilities
+        self.model = "command-a-03-2025"
 
     async def generate(self, prompt: str, system_prompt: str) -> str:
         """Generate a response using Cohere's chat endpoint."""

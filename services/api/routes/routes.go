@@ -46,6 +46,7 @@ func SetupRoutes(
 
 		pms := api.Group("/pms")
 		{
+			pms.POST("/households", pmsCommandHandler.HandleCreateHousehold)
 			pms.POST("/targets", pmsCommandHandler.HandleSetTarget)
 			pms.POST("/optimization", pmsCommandHandler.HandleRunOptimization)
 			pms.POST("/proposals/:id/approve", pmsCommandHandler.HandleApproveProposal)

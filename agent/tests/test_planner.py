@@ -200,4 +200,4 @@ class TestCohereProvider:
         with patch.dict("os.environ", {"COHERE_API_KEY": "test-key"}):
             provider = CohereProvider()
             assert provider.api_key == "test-key"
-            assert provider.model == "command-r-plus"
+            assert provider.model == "command-a-03-2025"

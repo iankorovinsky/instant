@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatDate } from "@/lib/pms/mock-data";
+import { formatCurrency, formatDate } from "@/lib/pms/ui";
 import { getAccounts, getHouseholds } from "@/lib/api/pms";
 
 export default function AccountsPage() {

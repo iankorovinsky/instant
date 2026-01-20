@@ -1,0 +1,51 @@
+@keyframes home-scroll-left {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.scrollLeft {
+  animation: home-scroll-left 30s linear infinite;
+}
+
+.btnArrowContainer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  width: 20px;
+  height: 20px;
+}
+
+.btnArrow {
+  transition: transform 0.3s ease;
+}
+
+.btnHover {
+}
+
+.btnHover:hover .btnArrow {
+  transform: translateX(4px);
+}
+
+.testimonialCard {
+  transition: all 0.3s ease;
+}
+
+.testimonialCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+}
+
+.productTag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-width: 1px;
+}

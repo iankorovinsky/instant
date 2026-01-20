@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, getDriftStatus } from "@/lib/pms/mock-data";
+import { formatCurrency, getDriftStatus } from "@/lib/pms/ui";
 import { getAccounts, getDrift, getHouseholds, getProposals } from "@/lib/api/pms";
 
 const quickLinks = [

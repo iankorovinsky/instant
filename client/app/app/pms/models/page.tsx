@@ -14,13 +14,20 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { portfolioModels, formatDate } from "@/lib/pms/mock-data";
+const models: Array<{
+  modelId: string;
+  name: string;
+  description?: string;
+  durationTarget?: number;
+  assignedAccountIds?: string[];
+  updatedAt?: string;
+}> = [];
 
 export default function ModelsPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
 
-  const filteredModels = portfolioModels.filter((m) =>
+  const filteredModels = models.filter((m) =>
     m.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -88,10 +95,12 @@ export default function ModelsPage() {
                   <TableCell className="text-muted-foreground max-w-xs truncate">
                     {model.description}
                   </TableCell>
-                  <TableCell className="text-right">{model.durationTarget}y</TableCell>
-                  <TableCell className="text-right">{model.assignedAccountIds.length}</TableCell>
+                  <TableCell className="text-right">{model.durationTarget ? `${model.durationTarget}y` : "-"}</TableCell>
+                  <TableCell className="text-right">
+                    {model.assignedAccountIds ? model.assignedAccountIds.length : "-"}
+                  </TableCell>
                   <TableCell className="text-right text-muted-foreground">
-                    {formatDate(model.updatedAt)}
+                    {model.updatedAt || "-"}
                   </TableCell>
                 </TableRow>
               ))}

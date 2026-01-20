@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import {
   History,
   Calendar,
@@ -38,12 +37,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  getFilteredEvents,
-  formatDate,
-  formatDateTime,
-} from "@/lib/events/mock-data";
-import type { ReplayScope, ReplayStatus } from "@/lib/events/types";
+import { fetchEvents } from "@/lib/events/api";
+import { formatDate, formatDateTime } from "@/lib/events/ui";
+import type { Event, ReplayScope, ReplayStatus } from "@/lib/events/types";
 
 const projectionScopes: { value: ReplayScope; label: string; description: string; icon: React.ReactNode }[] = [
   { value: "all", label: "All Projections", description: "Rebuild all system projections", icon: <RefreshCw className="h-4 w-4" /> },
@@ -66,7 +62,6 @@ for (let i = 0; i < 7; i++) {
 }
 
 export default function EventReplayPage() {
-  const router = useRouter();
 
   // Time selection
   const [marketDate, setMarketDate] = useState<Date>(availableDates[0]);
@@ -85,13 +80,31 @@ export default function EventReplayPage() {
     endTime?: Date;
     error?: string;
   } | null>(null);
+  const [events, setEvents] = useState<Event[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const loadEvents = async () => {
+      try {
+        const data = await fetchEvents();
+        if (!active) return;
+        setEvents(data);
+      } catch (err) {
+        console.error("Failed to load events", err);
+        if (!active) return;
+        setEvents([]);
+      }
+    };
+    loadEvents();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Get events that would be replayed
   const eventsToReplay = useMemo(() => {
-    return getFilteredEvents({
-      dateTo: systemTimeCutoff,
-    });
-  }, [systemTimeCutoff]);
+    return events.filter((event) => event.occurredAt <= systemTimeCutoff);
+  }, [events, systemTimeCutoff]);
 
   const startReplay = async () => {
     setReplayStatus("in_progress");

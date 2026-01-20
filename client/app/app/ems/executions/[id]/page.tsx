@@ -42,9 +42,8 @@ import {
   formatDateTime,
   formatPrice,
   formatBasisPoints,
-} from "@/lib/ems/mock-data";
+} from "@/lib/ems/ui";
 import { fetchExecutionById, fetchExecutionEvents } from "@/lib/ems/api";
-import { getExecutionWithFills, getExecutionEvents } from "@/lib/ems/mock-data";
 import type { ExecutionEvent, ExecutionWithFills } from "@/lib/ems/types";
 
 export default function ExecutionDetailPage({
@@ -63,19 +62,13 @@ export default function ExecutionDetailPage({
     fetchExecutionById(id)
       .then((data) => {
         if (isMounted) {
-          setExecution(data ?? getExecutionWithFills(id));
+          setExecution(data);
         }
-      })
-      .catch(() => {
-        if (isMounted) setExecution(getExecutionWithFills(id));
       });
 
     fetchExecutionEvents(id)
       .then((data) => {
         if (isMounted) setEvents(data);
-      })
-      .catch(() => {
-        if (isMounted) setEvents(getExecutionEvents(id));
       });
 
     return () => {

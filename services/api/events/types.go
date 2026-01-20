@@ -12,6 +12,7 @@ const (
 	AggregateOrder            = "Order"
 	AggregateExecution        = "Execution"
 	AggregateAccount          = "Account"
+	AggregateHousehold        = "Household"
 	AggregatePortfolio        = "Portfolio"
 	AggregateProposal         = "Proposal"
 	AggregateRuleSet          = "RuleSet"
@@ -77,6 +78,7 @@ const (
 // EventType constants - PMS
 const (
 	EventAccountCreated       = "AccountCreated"
+	EventHouseholdCreated     = "HouseholdCreated"
 	EventPositionUpdated      = "PositionUpdated"
 	EventTargetSet            = "TargetSet"
 	EventOptimizationRequested = "OptimizationRequested"

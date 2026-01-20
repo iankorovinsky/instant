@@ -49,6 +49,52 @@ func NewService(db *sql.DB, es *eventstore.EventStore, eb *eventbus.EventBus) (*
 	}, nil
 }
 
+// CreateHousehold inserts a new household and emits an event.
+func (s *Service) CreateHousehold(req CreateHouseholdRequest, correlationID string) (string, error) {
+	if req.Name == "" {
+		return "", errors.New("name is required")
+	}
+	if req.CreatedBy == "" {
+		return "", errors.New("createdBy is required")
+	}
+
+	householdID := uuid.New().String()
+	createdAt := time.Now().UTC()
+
+	_, err := s.db.Exec(
+		`INSERT INTO households ("householdId", name, "createdAt", "createdBy")
+		 VALUES ($1, $2, $3, $4)`,
+		householdID,
+		req.Name,
+		createdAt,
+		req.CreatedBy,
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to insert household: %w", err)
+	}
+
+	event := events.NewEvent(
+		events.EventHouseholdCreated,
+		events.AggregateHousehold,
+		householdID,
+		req.CreatedBy,
+		"user",
+		correlationID,
+		map[string]interface{}{
+			"householdId": householdID,
+			"name":        req.Name,
+			"createdAt":   createdAt,
+			"createdBy":   req.CreatedBy,
+		},
+	)
+
+	if err := s.appendAndPublish(event); err != nil {
+		return householdID, err
+	}
+
+	return householdID, nil
+}
+
 // SetTarget creates or updates a portfolio target.
 func (s *Service) SetTarget(req SetTargetRequest, correlationID string) (string, error) {
 	if req.ScopeID == "" {

@@ -22,6 +22,32 @@ func NewPMSCommandHandler(pmsService *pms.Service) *PMSCommandHandler {
 	}
 }
 
+// HandleCreateHousehold handles CreateHousehold command.
+func (h *PMSCommandHandler) HandleCreateHousehold(c *gin.Context) {
+	var req pms.CreateHouseholdRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	correlationID := c.GetHeader("X-Correlation-ID")
+	if correlationID == "" {
+		correlationID = uuid.New().String()
+	}
+
+	householdID, err := h.pmsService.CreateHousehold(req, correlationID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"householdId":  householdID,
+		"correlationId": correlationID,
+		"status":       "created",
+	})
+}
+
 // HandleSetTarget handles SetTarget command.
 func (h *PMSCommandHandler) HandleSetTarget(c *gin.Context) {
 	var req pms.SetTargetRequest

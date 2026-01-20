@@ -20,6 +20,11 @@ python ingest_security_data.py
 python ingest_yield_curves_fred.py
 ```
 
+Seed the app database:
+```bash
+./seed-app.sh
+```
+
 Notes:
 - `ingest_security_data.py` loads `ust-notes-data.csv` into `instruments`.
 - `ingest_yield_curves_fred.py` pulls FRED par yields and upserts `yield_curves`

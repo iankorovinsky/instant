@@ -17,7 +17,6 @@ import {
   useExecutionFilters,
 } from "@/components/ems";
 import { fetchExecutions } from "@/lib/ems/api";
-import { executions as mockExecutions } from "@/lib/ems/mock-data";
 import type { ExecutionGroupBy } from "@/lib/ems/types";
 import type { Execution } from "@/lib/ems/types";
 
@@ -30,14 +29,11 @@ export default function ExecutionTapePage() {
     fetchExecutions()
       .then((data) => {
         if (isMounted) setExecutions(data);
-      })
-      .catch(() => {
-        if (isMounted) setExecutions(mockExecutions);
       });
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [executions]);
 
   const {
     filters,

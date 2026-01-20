@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Search, Save, Send } from "lucide-react";
@@ -19,9 +19,11 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { accounts, households } from "@/lib/pms/mock-data";
-import { instruments } from "@/lib/oms/mock-data";
-import type { OrderSide, OrderType, TimeInForce } from "@/lib/oms/types";
+import { getAccounts, getHouseholds } from "@/lib/api/pms";
+import { fetchInstruments } from "@/lib/marketdata/api";
+import { useCreateOrder } from "@/lib/hooks/use-oms";
+import type { OrderSide, OrderType, TimeInForce } from "@/lib/api/oms";
+import type { InstrumentWithPricing } from "@/lib/marketdata/types";
 
 export default function CreateOrderPage() {
   const router = useRouter();
@@ -37,6 +39,13 @@ export default function CreateOrderPage() {
   const [timeInForce, setTimeInForce] = useState<TimeInForce>("DAY");
   const [notes, setNotes] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [accounts, setAccounts] = useState<
+    Array<{ accountId: string; householdId: string; name: string; householdName?: string }>
+  >([]);
+  const [households, setHouseholds] = useState<Array<{ householdId: string; name: string }>>([]);
+  const [instruments, setInstruments] = useState<InstrumentWithPricing[]>([]);
+
+  const createOrder = useCreateOrder();
 
   const selectedAccount = accounts.find((a) => a.accountId === accountId);
   const selectedHousehold = selectedAccount
@@ -47,8 +56,35 @@ export default function CreateOrderPage() {
   const filteredInstruments = instruments.filter(
     (i) =>
       i.cusip.toLowerCase().includes(instrumentSearch.toLowerCase()) ||
-      i.description.toLowerCase().includes(instrumentSearch.toLowerCase())
+      i.name.toLowerCase().includes(instrumentSearch.toLowerCase())
   );
+
+  useEffect(() => {
+    let active = true;
+    const loadData = async () => {
+      try {
+        const [accountsResponse, householdsResponse, instrumentsResponse] = await Promise.all([
+          getAccounts(),
+          getHouseholds(),
+          fetchInstruments({ limit: 500 }),
+        ]);
+        if (!active) return;
+        setAccounts(accountsResponse.accounts || []);
+        setHouseholds(householdsResponse.households || []);
+        setInstruments(instrumentsResponse.instruments || []);
+      } catch (err) {
+        console.error("Failed to load OMS create data", err);
+        if (!active) return;
+        setAccounts([]);
+        setHouseholds([]);
+        setInstruments([]);
+      }
+    };
+    loadData();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const isValid =
     accountId &&
@@ -58,20 +94,59 @@ export default function CreateOrderPage() {
     (orderType !== "LIMIT" || (limitPrice && parseFloat(limitPrice) > 0)) &&
     (orderType !== "CURVE_RELATIVE" || curveSpreadBp);
 
-  const handleSaveAsDraft = () => {
-    setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      router.push("/app/oms/orders");
-    }, 1000);
+  const buildRequest = () => {
+    const request: {
+      accountId: string;
+      instrumentId: string;
+      side: OrderSide;
+      quantity: number;
+      orderType: OrderType;
+      limitPrice?: number;
+      curveSpreadBp?: number;
+      timeInForce: TimeInForce;
+      createdBy: string;
+    } = {
+      accountId,
+      instrumentId: cusip,
+      side,
+      quantity: Number.parseFloat(quantity),
+      orderType,
+      timeInForce,
+      createdBy: "advisor@instant.com",
+    };
+
+    if (orderType === "LIMIT" && limitPrice) {
+      request.limitPrice = Number.parseFloat(limitPrice);
+    }
+    if (orderType === "CURVE_RELATIVE" && curveSpreadBp) {
+      request.curveSpreadBp = Number.parseFloat(curveSpreadBp);
+    }
+
+    return request;
   };
 
-  const handleSubmitForApproval = () => {
+  const handleSaveAsDraft = async () => {
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      await createOrder.mutateAsync(buildRequest());
       router.push("/app/oms/orders");
-    }, 1500);
+    } catch (err) {
+      console.error("Failed to create order", err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmitForApproval = async () => {
+    setIsSubmitting(true);
+    try {
+      await createOrder.mutateAsync(buildRequest());
+      router.push("/app/oms/orders");
+    } catch (err) {
+      console.error("Failed to submit order", err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -182,7 +257,7 @@ export default function CreateOrderPage() {
                         <span className="font-mono font-medium">{inst.cusip}</span>
                         <Badge variant="secondary">{inst.type}</Badge>
                       </div>
-                      <p className="text-sm text-muted-foreground">{inst.description}</p>
+                      <p className="text-sm text-muted-foreground">{inst.name}</p>
                     </div>
                   ))}
                   {filteredInstruments.length === 0 && (
@@ -207,7 +282,7 @@ export default function CreateOrderPage() {
                       Change
                     </Button>
                   </div>
-                  <p className="text-muted-foreground">{selectedInstrument.description}</p>
+                  <p className="text-muted-foreground">{selectedInstrument.name}</p>
                   <Badge variant="secondary" className="mt-2">
                     {selectedInstrument.type}
                   </Badge>
@@ -390,7 +465,7 @@ export default function CreateOrderPage() {
                     <>
                       <p className="font-mono font-medium">{selectedInstrument.cusip}</p>
                       <p className="text-sm text-muted-foreground">
-                        {selectedInstrument.description}
+                        {selectedInstrument.name}
                       </p>
                     </>
                   ) : (

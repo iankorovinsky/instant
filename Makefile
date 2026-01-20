@@ -53,6 +53,7 @@ migrate-status:
 data:
 	@cd data && python ingest_security_data.py
 	@cd data && python ingest_yield_curves_fred.py
+	@./data/seed-app.sh
 
 # Seed test data
 seed-test-data:

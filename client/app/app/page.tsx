@@ -200,11 +200,6 @@ export default function Dashboard() {
             Welcome back. Here&apos;s an overview of your practice.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm">
-          <Calendar className="h-4 w-4 text-muted-foreground" />
-          <span className="text-muted-foreground">As of</span>
-          <Badge variant="secondary">Dec 24, 2024</Badge>
-        </div>
       </div>
 
       {/* Stats Grid */}

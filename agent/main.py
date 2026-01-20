@@ -11,8 +11,15 @@ from pydantic import BaseModel, Field
 from typing import Optional
 import httpx
 import uuid
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 from planner import CopilotPlanner, CommandPlan, ProposeRequest, ExecuteRequest, ExecutionResult
+
+# Load root .env so agent can access shared config (e.g., COHERE_API_KEY).
+ROOT_ENV = Path(__file__).resolve().parents[1] / ".env"
+load_dotenv(ROOT_ENV, override=False)
 
 app = FastAPI(
     title="Instant AI Copilot",

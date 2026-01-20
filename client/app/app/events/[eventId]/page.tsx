@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useMemo } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -27,17 +27,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { fetchEventById, fetchEvents, toTimelineItem } from "@/lib/events/api";
 import {
-  getEventById,
-  getRelatedEvents,
   getModuleFromEventType,
   getModuleColor,
   getModuleLabel,
   getAggregateColor,
   formatDateTime,
   formatRelativeTime,
-} from "@/lib/events/mock-data";
+} from "@/lib/events/ui";
+import type { Event, EventTimelineItem } from "@/lib/events/types";
 
 interface PageProps {
   params: Promise<{ eventId: string }>;
@@ -47,14 +46,74 @@ export default function EventDetailPage({ params }: PageProps) {
   const { eventId } = use(params);
   const router = useRouter();
 
-  const event = useMemo(() => getEventById(eventId), [eventId]);
-  const relatedEvents = useMemo(() => getRelatedEvents(eventId), [eventId]);
+  const [event, setEvent] = useState<Event | null>(null);
+  const [correlationChain, setCorrelationChain] = useState<EventTimelineItem[]>([]);
+  const [aggregateTimeline, setAggregateTimeline] = useState<EventTimelineItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const loadEvent = async () => {
+      setIsLoading(true);
+      try {
+        const found = await fetchEventById(eventId);
+        if (!active) return;
+        setEvent(found);
+        if (!found) {
+          setCorrelationChain([]);
+          setAggregateTimeline([]);
+          return;
+        }
+
+        const [correlationEvents, aggregateEvents] = await Promise.all([
+          found.correlationId
+            ? fetchEvents({ correlationId: found.correlationId })
+            : Promise.resolve([]),
+          fetchEvents({ aggregateType: [found.aggregate.type], aggregateId: found.aggregate.id }),
+        ]);
+        if (!active) return;
+        setCorrelationChain(correlationEvents.map(toTimelineItem));
+        setAggregateTimeline(aggregateEvents.map(toTimelineItem));
+      } catch (err) {
+        console.error("Failed to load event details", err);
+        if (!active) return;
+        setEvent(null);
+        setCorrelationChain([]);
+        setAggregateTimeline([]);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    };
+    loadEvent();
+    return () => {
+      active = false;
+    };
+  }, [eventId]);
 
   const module = event ? getModuleFromEventType(event.eventType) : null;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
   };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Button variant="ghost" onClick={() => router.back()}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center text-muted-foreground">
+              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium">Loading event...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (!event) {
     return (
@@ -311,7 +370,7 @@ export default function EventDetailPage({ params }: PageProps) {
       </div>
 
       {/* Correlation Chain */}
-      {relatedEvents.correlationChain.length > 0 && (
+      {correlationChain.length > 0 && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -321,7 +380,7 @@ export default function EventDetailPage({ params }: PageProps) {
                   Correlation Chain
                 </CardTitle>
                 <CardDescription>
-                  {relatedEvents.correlationChain.length} events with the same correlation ID
+                  {correlationChain.length} events with the same correlation ID
                 </CardDescription>
               </div>
               <Button variant="outline" size="sm" asChild>
@@ -333,7 +392,7 @@ export default function EventDetailPage({ params }: PageProps) {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {relatedEvents.correlationChain.map((relEvent, index) => (
+              {correlationChain.map((relEvent, index) => (
                 <div
                   key={relEvent.eventId}
                   className={`flex items-center gap-4 p-3 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors ${
@@ -366,7 +425,7 @@ export default function EventDetailPage({ params }: PageProps) {
       )}
 
       {/* Aggregate Timeline */}
-      {relatedEvents.aggregateTimeline.length > 1 && (
+      {aggregateTimeline.length > 1 && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -376,7 +435,7 @@ export default function EventDetailPage({ params }: PageProps) {
                   Aggregate Timeline
                 </CardTitle>
                 <CardDescription>
-                  {relatedEvents.aggregateTimeline.length} events for {event.aggregate.type}: {event.aggregate.id.slice(0, 8)}...
+                  {aggregateTimeline.length} events for {event.aggregate.type}: {event.aggregate.id.slice(0, 8)}...
                 </CardDescription>
               </div>
               <Button variant="outline" size="sm" asChild>
@@ -397,8 +456,8 @@ export default function EventDetailPage({ params }: PageProps) {
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
-                {relatedEvents.aggregateTimeline.map((relEvent, index) => (
+            <TableBody>
+                {aggregateTimeline.map((relEvent, index) => (
                   <TableRow
                     key={relEvent.eventId}
                     className={`cursor-pointer ${

@@ -9,10 +9,9 @@ import {
   getComplianceColor,
   formatOrderQuantity,
   formatPrice,
-  orderFills,
-} from "@/lib/oms/mock-data";
-import { accounts, households, formatDate } from "@/lib/pms/mock-data";
-import type { Order, OrderGroupBy } from "@/lib/oms/types";
+} from "@/lib/oms/ui";
+import { formatDate } from "@/lib/pms/ui";
+import type { Order } from "@/lib/api/oms";
 
 interface OrderRowProps {
   order: Order;
@@ -31,12 +30,9 @@ export function OrderRow({
 }: OrderRowProps) {
   const router = useRouter();
 
-  const account = accounts.find((a) => a.accountId === order.accountId);
-  const household = account
-    ? households.find((h) => h.householdId === account.householdId)
-    : null;
-  const fills = orderFills.filter((f) => f.orderId === order.orderId);
-  const lastFill = fills.length > 0 ? fills[fills.length - 1] : null;
+  const accountName = order.accountName || order.accountId;
+  const householdLabel = order.householdId || "Unknown";
+  const cusipLabel = order.cusip || order.instrumentId;
 
   const handleRowClick = () => {
     router.push(`/app/oms/orders/${order.orderId}`);
@@ -50,9 +46,9 @@ export function OrderRow({
       >
         <TableCell>
           <div>
-            <p className="font-medium font-mono text-sm">{order.cusip}</p>
+            <p className="font-medium font-mono text-sm">{cusipLabel}</p>
             <p className="text-xs text-muted-foreground truncate max-w-32">
-              {order.instrumentDescription}
+              {order.instrumentName || order.instrumentId}
             </p>
           </div>
         </TableCell>
@@ -91,9 +87,9 @@ export function OrderRow({
       )}
       <TableCell>
         <div>
-          <p className="font-mono text-sm font-medium">{order.cusip}</p>
+          <p className="font-mono text-sm font-medium">{cusipLabel}</p>
           <p className="text-xs text-muted-foreground truncate max-w-32">
-            {order.instrumentDescription}
+            {order.instrumentName || order.instrumentId}
           </p>
         </div>
       </TableCell>
@@ -127,9 +123,9 @@ export function OrderRow({
       )}
       <TableCell>
         <div>
-          <p className="text-sm">{account?.name || "Unknown"}</p>
+          <p className="text-sm">{accountName}</p>
           <p className="text-xs text-muted-foreground">
-            {household?.name || "Unknown"}
+            {householdLabel}
           </p>
         </div>
       </TableCell>
@@ -143,16 +139,7 @@ export function OrderRow({
         )}
       </TableCell>
       <TableCell className="text-right">
-        {lastFill ? (
-          <div className="text-sm">
-            <p>{formatOrderQuantity(lastFill.quantity)}</p>
-            <p className="text-muted-foreground">
-              @ {formatPrice(lastFill.price)}
-            </p>
-          </div>
-        ) : (
-          <span className="text-muted-foreground">-</span>
-        )}
+        <span className="text-muted-foreground">-</span>
       </TableCell>
       <TableCell className="text-right text-muted-foreground text-sm pr-4">
         {formatDate(order.updatedAt)}

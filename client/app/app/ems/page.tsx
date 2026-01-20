@@ -15,11 +15,8 @@ import {
   ActiveExecutionsTable,
   CompletedExecutionsTable,
 } from "@/components/ems";
-import {
-  formatCurrency,
-} from "@/lib/ems/mock-data";
+import { formatCurrency } from "@/lib/ems/ui";
 import { fetchExecutions, summarizeExecutions } from "@/lib/ems/api";
-import { executions as mockExecutions } from "@/lib/ems/mock-data";
 import type { Execution } from "@/lib/ems/types";
 
 export default function EMSDashboardPage() {
@@ -31,9 +28,6 @@ export default function EMSDashboardPage() {
     fetchExecutions()
       .then((data) => {
         if (isMounted) setExecutions(data);
-      })
-      .catch(() => {
-        if (isMounted) setExecutions(mockExecutions);
       });
     return () => {
       isMounted = false;
@@ -187,34 +181,8 @@ export default function EMSDashboardPage() {
           <CardTitle>Slippage by Bucket</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-5">
-            {[
-              { bucket: "0-2y", spread: 2, avgSlippage: 1.5 },
-              { bucket: "2-5y", spread: 4, avgSlippage: 3.2 },
-              { bucket: "5-10y", spread: 6, avgSlippage: 5.5 },
-              { bucket: "10-20y", spread: 10, avgSlippage: 8.2 },
-              { bucket: "20y+", spread: 15, avgSlippage: 14.5 },
-            ].map((bucket) => (
-              <div key={bucket.bucket} className="text-center">
-                <div className="text-sm font-medium mb-2">{bucket.bucket}</div>
-                <div className="h-24 bg-muted rounded relative overflow-hidden">
-                  <div
-                    className="absolute bottom-0 left-0 right-0 bg-primary/20 rounded"
-                    style={{ height: `${(bucket.spread / 15) * 100}%` }}
-                  />
-                  <div
-                    className="absolute bottom-0 left-0 right-0 bg-primary rounded"
-                    style={{ height: `${(bucket.avgSlippage / 15) * 100}%` }}
-                  />
-                </div>
-                <div className="mt-2">
-                  <div className="text-lg font-bold">{bucket.avgSlippage}bp</div>
-                  <div className="text-xs text-muted-foreground">
-                    Spread: {bucket.spread}bp
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="text-sm text-muted-foreground">
+            Slippage breakdowns are available once execution analytics are ingested.
           </div>
         </CardContent>
       </Card>

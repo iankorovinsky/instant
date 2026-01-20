@@ -109,16 +109,6 @@ const navItems: NavItem[] = [
       { href: "/app/marketdata/pricing", label: "Pricing" },
     ],
   },
-  {
-    href: "/app/events",
-    label: "Events",
-    icon: History,
-    subItems: [
-      { href: "/app/events", label: "Dashboard" },
-      { href: "/app/events/timeline", label: "Timeline" },
-      { href: "/app/events/replay", label: "Replay" },
-    ],
-  },
 ];
 
 interface AppSidebarProps {

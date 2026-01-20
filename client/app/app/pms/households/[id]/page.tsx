@@ -15,7 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatDate } from "@/lib/pms/mock-data";
+import { formatCurrency, formatDate } from "@/lib/pms/ui";
 import { getHouseholdView } from "@/lib/api/pms";
 
 export default function HouseholdDetailPage({
@@ -200,6 +200,9 @@ export default function HouseholdDetailPage({
             <TableBody>
               {householdAccounts.map((account: any) => {
                 const marketValue = account.marketValue || 0;
+                const accountPositions = aggregatedPositions.filter(
+                  (position: any) => position.accountId === account.accountId
+                );
                 return (
                   <TableRow
                     key={account.accountId}
