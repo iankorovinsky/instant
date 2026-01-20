@@ -57,7 +57,7 @@ export default function OptimizationPage() {
   const [maxTurnover, setMaxTurnover] = useState<number>(20);
   const [assumptions, setAssumptions] = useState<string>("");
   const [isRunning, setIsRunning] = useState(false);
-  const [accounts, setAccounts] = useState<Array<{ accountId: string; name: string }>>([]);
+  const [accounts, setAccounts] = useState<Array<{ accountId: string; name: string; householdId?: string }>>([]);
   const [households, setHouseholds] = useState<Array<{ householdId: string; name: string }>>([]);
   const [currentAnalytics, setCurrentAnalytics] = useState<any | null>(null);
   const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
@@ -482,7 +482,7 @@ export default function OptimizationPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {Object.entries(currentAnalytics.bucketWeights).map(([bucket, weight]) => {
+                  {(Object.entries(currentAnalytics.bucketWeights) as [string, number][]).map(([bucket, weight]) => {
                     const target = bucketWeights[bucket as keyof BucketWeights];
                     const diff = weight - target;
                     return (

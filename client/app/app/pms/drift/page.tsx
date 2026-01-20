@@ -373,7 +373,7 @@ export default function DriftDashboardPage() {
                     </Button>
                   </div>
                   <div className="flex gap-2">
-                    {Object.entries(drift.bucketDrifts).map(([bucket, driftValue]) => (
+                    {(Object.entries(drift.bucketDrifts) as [string, number][]).map(([bucket, driftValue]) => (
                       <div key={bucket} className="flex-1">
                         <div className="text-center mb-2">
                           <div className="text-sm font-medium">{bucket}</div>

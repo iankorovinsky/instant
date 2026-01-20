@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate } from "@/lib/pms/ui";
+import type { Position } from "@/lib/pms/types";
 import { getAccountView, getHouseholdView } from "@/lib/api/pms";
 
 export default function AccountDetailPage({
@@ -47,7 +48,7 @@ export default function AccountDetailPage({
   }, [id]);
 
   const account = accountView?.account;
-  const positions = accountView?.positions || [];
+  const positions: Position[] = accountView?.positions || [];
   const analytics = accountView?.analytics;
   const modelId = account?.modelId;
 
@@ -201,7 +202,7 @@ export default function AccountDetailPage({
         <CardContent>
           <div className="flex gap-2">
             {analytics &&
-              Object.entries(analytics.bucketWeights).map(([bucket, weight]) => {
+              (Object.entries(analytics.bucketWeights) as [string, number][]).map(([bucket, weight]) => {
               return (
                 <div key={bucket} className="flex-1">
                   <div className="text-center mb-2">

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate } from "@/lib/pms/ui";
+import type { Position } from "@/lib/pms/types";
 import { getHouseholdView } from "@/lib/api/pms";
 
 export default function HouseholdDetailPage({
@@ -46,7 +47,7 @@ export default function HouseholdDetailPage({
   const household = householdView?.household;
   const householdAccounts = householdView?.accounts || [];
   const analytics = householdView?.analytics;
-  const aggregatedPositions = householdView?.positions || [];
+  const aggregatedPositions: Position[] = householdView?.positions || [];
 
   if (!household && !isLoading) {
     return (
@@ -163,7 +164,7 @@ export default function HouseholdDetailPage({
         <CardContent>
           <div className="flex gap-2">
             {analytics &&
-              Object.entries(analytics.bucketWeights).map(([bucket, weight]) => (
+              (Object.entries(analytics.bucketWeights) as [string, number][]).map(([bucket, weight]) => (
                 <div key={bucket} className="flex-1">
                   <div className="text-center mb-2">
                     <div className="text-sm font-medium">{bucket}</div>

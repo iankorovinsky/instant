@@ -332,7 +332,7 @@ export default function OrderDetailPage({
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
                           {getEventIcon(event.eventType)}
                         </div>
-                        {idx < order.events.length - 1 && (
+                        {idx < order.events!.length - 1 && (
                           <div className="w-px h-full bg-border mt-2" />
                         )}
                       </div>

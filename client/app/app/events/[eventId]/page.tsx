@@ -27,6 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { fetchEventById, fetchEvents, toTimelineItem } from "@/lib/events/api";
 import {
   getModuleFromEventType,

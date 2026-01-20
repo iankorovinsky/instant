@@ -67,6 +67,8 @@ import {
 import type {
   Evaluation,
   EvaluationPoint,
+  MetricType,
+  PredicateOperator,
   Rule,
   RuleScope,
   RuleSeverity,
@@ -390,7 +392,9 @@ export default function RuleDetailPage({
               <Label>Metric</Label>
               <Select
                 value={editState.metric}
-                onValueChange={(value) => setEditState((prev) => ({ ...prev, metric: value }))}
+                onValueChange={(value) =>
+                  setEditState((prev) => ({ ...prev, metric: value as MetricType }))
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Metric" />
@@ -408,7 +412,9 @@ export default function RuleDetailPage({
               <Label>Operator</Label>
               <Select
                 value={editState.operator}
-                onValueChange={(value) => setEditState((prev) => ({ ...prev, operator: value }))}
+                onValueChange={(value) =>
+                  setEditState((prev) => ({ ...prev, operator: value as PredicateOperator }))
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Operator" />

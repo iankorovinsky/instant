@@ -65,7 +65,7 @@ import {
   enableComplianceRule,
   fetchComplianceRules,
 } from "@/lib/compliance/api";
-import type { EvaluationPoint, Rule, RuleGroupBy, RuleScope, RuleSeverity, RuleStatus } from "@/lib/compliance/types";
+import type { EvaluationPoint, MetricType, PredicateOperator, Rule, RuleGroupBy, RuleScope, RuleSeverity, RuleStatus } from "@/lib/compliance/types";
 
 export default function RulesPage() {
   const router = useRouter();
@@ -419,7 +419,7 @@ export default function RulesPage() {
               <Select
                 value={formState.metric}
                 onValueChange={(value) =>
-                  setFormState((prev) => ({ ...prev, metric: value }))
+                  setFormState((prev) => ({ ...prev, metric: value as MetricType }))
                 }
               >
                 <SelectTrigger>
@@ -439,7 +439,7 @@ export default function RulesPage() {
               <Select
                 value={formState.operator}
                 onValueChange={(value) =>
-                  setFormState((prev) => ({ ...prev, operator: value }))
+                  setFormState((prev) => ({ ...prev, operator: value as PredicateOperator }))
                 }
               >
                 <SelectTrigger>
